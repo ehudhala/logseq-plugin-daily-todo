@@ -8,10 +8,13 @@ const todoDoneRegex = /^(TODO|DONE)\s+/;
 const doneRegex = /^(DONE)\s+/;
 const isUnderlineRegex = /<ins>.*<\/ins>/;
 
+const highlightRegex = /^(TODO\s+|DONE\s+|\s*)\^\^(.*)\^\^/;
+
 const settingsVersion = 'v1';
 export const defaultSettings = {
   keyBindings: {
     'TODO': 'mod+1',
+    'HIGHLIGHT': 'mod+4',
   },
   settingsVersion,
   disabled: false,
@@ -48,10 +51,36 @@ const getSettings = (
   return key ? (merged[key] ? merged[key] : defaultValue) : merged;
 };
 
+const isHighlighted = (block: BlockEntity) => {
+  return highlightRegex.test(block.content);
+};
+
 const extractTodoState = (block: BlockEntity) => {
   let todoMatch = todoDoneRegex.exec(block.content);
   return (todoMatch !== null && todoMatch.length > 0) ? todoMatch[1] : '';
 };
+
+async function toggleHighlight() {
+  // sorry for the copy-paste maybe I'll fix you later
+  const selected = await logseq.Editor.getSelectedBlocks();
+  const blocks = (selected && selected.length > 1) ? selected : [await logseq.Editor.getCurrentBlock()];
+  const blocksInDifferentStates = (blocks.length > 0 && blocks.some(block => isHighlighted(block) != isHighlighted(blocks[0])));
+  for (let block of blocks) {
+    if (block?.uuid) {
+      if (isHighlighted(block)) {
+        let [, todoState, strippedContent] = highlightRegex.exec(block.content);
+        await logseq.Editor.updateBlock(block.uuid, todoState + strippedContent);
+      } else {
+        let todoPrefix = extractTodoState(block);
+        todoPrefix = todoPrefix !== '' ? todoPrefix + ' ' : todoPrefix;
+        await logseq.Editor.updateBlock(block.uuid,
+          blocksInDifferentStates // we want to just update all blocks to be un-highlighted
+            ? block.content
+            : todoPrefix + '^^' + block.content.replace(todoDoneRegex, '') + '^^');
+      }
+    }
+  }
+}
 
 async function toggleTODO() {
   const selected = await logseq.Editor.getSelectedBlocks();
@@ -230,6 +259,19 @@ async function main() {
     }
   );
 
+  logseq.App.registerCommandPalette(
+    {
+      key: `toggle-highlight-block`,
+      label: `Toggle highlighting for the current block(s)`,
+      keybinding: {
+        mode: 'global',
+        binding: keyBindings['HIGHLIGHT'] || 'mod+4',
+      },
+    },
+    async () => {
+      await toggleHighlight();
+    }
+  );
   logseq.DB.onChanged(async (params) => {
     await updateNewJournalWithAllTODOs(params);
   });
