@@ -1,10 +1,13 @@
-# logseq-plugin-heading-level-shortcuts
+# logseq-plugin-daily-todo
 
-[![Github All Releases](https://img.shields.io/github/downloads/vipzhicheng/logseq-plugin-heading-level-shortcuts/total.svg)](https://github.com/vipzhicheng/logseq-plugin-heading-level-shortcuts/releases)
+This plugin moves unfinished tasks from yesterday to every new journal and adds handy shortcuts from OneNote to Logseq:
+* `cmd+1` - toggle TODO state of selected blocks between TODO/DONE/non-task block
+* `cmd+4` - highlight the selected block
 
-This is a very tiny plugin for Logseq to bind `cmd+0` ~ `cmd+6` to change heading levels.
+The skeleton and most shortcut handling is forked and updated from https://github.com/vipzhicheng/logseq-plugin-heading-level-shortcuts
 
-![Screencast](./screencast.gif)
+Please note: this plugin is very specific to how I manage tasks in Logseq, and the code is still in an experimental but working state.
+Suggestions and improvements are welcome.
 
 ## Installation
 
