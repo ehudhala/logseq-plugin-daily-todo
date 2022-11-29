@@ -3,8 +3,10 @@ import '@logseq/libs';
 import {BlockEntity} from '@logseq/libs/dist/LSPlugin';
 
 
-const todoRegex = /^(TODO|DONE)\s+/;
+const todoRegex = /^(TODO)\s+/;
+const todoDoneRegex = /^(TODO|DONE)\s+/;
 const doneRegex = /^(DONE)\s+/;
+const isUnderlineRegex = /<ins>.*<\/ins>/;
 
 const settingsVersion = 'v1';
 export const defaultSettings = {
@@ -47,7 +49,7 @@ const getSettings = (
 };
 
 const extractTodoState = (block: BlockEntity) => {
-  let todoMatch = todoRegex.exec(block.content);
+  let todoMatch = todoDoneRegex.exec(block.content);
   return (todoMatch !== null && todoMatch.length > 0) ? todoMatch[1] : '';
 };
 
@@ -58,8 +60,8 @@ async function toggleTODO() {
   for (let block of blocks) {
     if (block?.uuid) {
       let todoState = blocksInDifferentStates ? 'DONE' : extractTodoState(block); // If blocks are in different states we "clear" them.
-      let strippedContent = todoRegex.test(block.content)
-        ? block.content.replace(todoRegex, '')
+      let strippedContent = todoDoneRegex.test(block.content)
+        ? block.content.replace(todoDoneRegex, '')
         : block.content;
       await logseq.Editor.updateBlock(
         block.uuid,
@@ -141,8 +143,9 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
   for (let group of latestJournalBlockGroups) {
     if (group.some(recursivelyCheckForTodoInBlock)) {
       for (let block of group) {
-        newJournalLastBlock = await recursiveCopyBlocks(block, newJournalLastBlock);
+        [newJournalLastBlock,] = await recursiveCopyBlocks(block, newJournalLastBlock);
       }
+      console.log(["inserting block between groups", newJournalLastBlock?.content, newJournalLastBlock]);
       newJournalLastBlock == await logseq.Editor.insertBlock(newJournalLastBlock.uuid, '');
     }
   }
@@ -150,27 +153,46 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
 
 async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEntity) {
   // copied from https://github.com/vipzhicheng/logseq-plugin-move-block TODO add note in readme
+  let hasAnyDoneDescendant = false;
   if (doneRegex.test(srcBlock.content)) {
-    return lastDestBlock;
+    return [lastDestBlock, true];
   }
   let newBlock = lastDestBlock;
   console.log({srcBlock, lastDestBlock});
   if (lastDestBlock.content !== '') {
+    console.log(["inserting block", srcBlock.content, lastDestBlock.content, srcBlock, lastDestBlock]);
     newBlock = await logseq.Editor.insertBlock(lastDestBlock.uuid, srcBlock.content, {
       sibling: true,
     });
   } else {
+    console.log(["updating block content", srcBlock.content, lastDestBlock.content, srcBlock, lastDestBlock]);
     await logseq.Editor.updateBlock(lastDestBlock.uuid, srcBlock.content);
     newBlock.content = srcBlock.content; // update doesn't update the instance.
   }
 
   if (srcBlock.children.length > 0) {
+    console.log(["inserting child block", srcBlock.content, newBlock.content, srcBlock, newBlock]);
     let newChildBlock = await logseq.Editor.insertBlock(newBlock.uuid, '');
+    const firstChildBlockUUID = newChildBlock.uuid;
     for (let child of srcBlock.children) {
-      newChildBlock = await recursiveCopyBlocks(child, newChildBlock);
+      let childHasAnyDoneDescendant;
+      [newChildBlock, childHasAnyDoneDescendant] = await recursiveCopyBlocks(child, newChildBlock);
+      console.log({hasAnyDoneDescendant, childHasAnyDoneDescendant});
+      hasAnyDoneDescendant = hasAnyDoneDescendant || childHasAnyDoneDescendant;
+    }
+    if (newChildBlock.uuid === firstChildBlockUUID && newChildBlock.content === '') {
+      // Actually all children were DONE, we didn't copy to the empty block.
+      console.log(["removing unused child block", newChildBlock?.content, newChildBlock]);
+      await logseq.Editor.removeBlock(newChildBlock.uuid);
     }
   }
-  return newBlock;
+  if (!hasAnyDoneDescendant && !isUnderlineRegex.test(srcBlock.content)) {
+    // we can safely delete the block if it was copied whole
+    // we keep underline blocks as they are titles
+    console.log(["Removing block from source", srcBlock.content, srcBlock]);
+    await logseq.Editor.removeBlock(srcBlock.uuid);
+  }
+  return [newBlock, hasAnyDoneDescendant];
 }
 
 
