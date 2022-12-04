@@ -4,8 +4,8 @@ import {BlockEntity} from '@logseq/libs/dist/LSPlugin';
 
 
 const todoRegex = /^(TODO)\s+/;
-const todoDoneRegex = /^(TODO|DONE)\s+/;
 const doneRegex = /^(DONE)\s+/;
+const todoDoneRegex = /^(TODO|DONE)\s+/;
 const isUnderlineRegex = /<ins>.*<\/ins>/;
 
 const highlightRegex = /^(TODO\s+|DONE\s+|\s*)\^\^(.*)\^\^/;
@@ -170,24 +170,41 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
 
   let newJournalLastBlock = await getLastBlock(newJournalBlock.name);
   for (let group of latestJournalBlockGroups) {
-    if (group.some(recursivelyCheckForTodoInBlock)) {
+    if (group.some(block => recursivelyCheckForRegexInBlock(block, todoRegex))) {
+      const hasAnyDoneTasks = group.some(block => recursivelyCheckForRegexInBlock(block, doneRegex));
       for (let block of group) {
-        [newJournalLastBlock,] = await recursiveCopyBlocks(block, newJournalLastBlock);
+        let isBlockRemoved = false;
+        [newJournalLastBlock, isBlockRemoved,] = await recursiveCopyBlocks(block, newJournalLastBlock, hasAnyDoneTasks);
+        if (isBlockRemoved) {
+          // We want to remove the empty "group separators" from the source journal
+          let leftBlock = await logseq.Editor.getBlock(block.left.id, {includeChildren: true});
+          while (leftBlock?.content === '' && leftBlock?.children?.length === 0) {
+            await logseq.Editor.removeBlock(leftBlock.uuid);
+            leftBlock = await logseq.Editor.getBlock(leftBlock.left.id, {includeChildren: true});
+          }
+        }
       }
-      console.log(["inserting block between groups", newJournalLastBlock?.content, newJournalLastBlock]);
-      newJournalLastBlock == await logseq.Editor.insertBlock(newJournalLastBlock.uuid, '');
+      console.log(["inserting block between groups", newJournalLastBlock?.content, newJournalLastBlock, newJournalBlock]);
+      // we add a block twice because the copy updates the last empty block
+      await logseq.Editor.appendBlockInPage(newJournalBlock.uuid, ''); // actual separator
+      await logseq.Editor.appendBlockInPage(newJournalBlock.uuid, ''); // new block of next group
+      newJournalLastBlock = await getLastBlock(newJournalBlock.name); // appendBlockInPage returns the block before somewhy
     }
+  }
+  let lastEmptyBlock = await getLastBlock(newJournalBlock.name);
+  while (lastEmptyBlock?.content === '') {
+    await logseq.Editor.removeBlock(lastEmptyBlock.uuid);
+    lastEmptyBlock = await getLastBlock(newJournalBlock.name);
   }
 }
 
-async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEntity) {
+async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEntity, groupHasAnyDoneTask: boolean) {
   // copied from https://github.com/vipzhicheng/logseq-plugin-move-block TODO add note in readme
   let hasAnyDoneDescendant = false;
   if (doneRegex.test(srcBlock.content)) {
     return [lastDestBlock, true];
   }
   let newBlock = lastDestBlock;
-  console.log({srcBlock, lastDestBlock});
   if (lastDestBlock.content !== '') {
     console.log(["inserting block", srcBlock.content, lastDestBlock.content, srcBlock, lastDestBlock]);
     newBlock = await logseq.Editor.insertBlock(lastDestBlock.uuid, srcBlock.content, {
@@ -205,8 +222,7 @@ async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEn
     const firstChildBlockUUID = newChildBlock.uuid;
     for (let child of srcBlock.children) {
       let childHasAnyDoneDescendant;
-      [newChildBlock, childHasAnyDoneDescendant] = await recursiveCopyBlocks(child, newChildBlock);
-      console.log({hasAnyDoneDescendant, childHasAnyDoneDescendant});
+      [newChildBlock, , childHasAnyDoneDescendant] = await recursiveCopyBlocks(child, newChildBlock, groupHasAnyDoneTask);
       hasAnyDoneDescendant = hasAnyDoneDescendant || childHasAnyDoneDescendant;
     }
     if (newChildBlock.uuid === firstChildBlockUUID && newChildBlock.content === '') {
@@ -215,18 +231,20 @@ async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEn
       await logseq.Editor.removeBlock(newChildBlock.uuid);
     }
   }
-  if (!hasAnyDoneDescendant && !isUnderlineRegex.test(srcBlock.content)) {
+  let isBlockRemoved = false;
+  if (!hasAnyDoneDescendant && (!(isUnderlineRegex.test(srcBlock.content) && groupHasAnyDoneTask))) {
     // we can safely delete the block if it was copied whole
-    // we keep underline blocks as they are titles
+    // we keep underline blocks for groups with done tasks as they are titles
     console.log(["Removing block from source", srcBlock.content, srcBlock]);
     await logseq.Editor.removeBlock(srcBlock.uuid);
+    isBlockRemoved = true;
   }
-  return [newBlock, hasAnyDoneDescendant];
+  return [newBlock, isBlockRemoved, hasAnyDoneDescendant];
 }
 
 
-function recursivelyCheckForTodoInBlock(block) {
-  return todoRegex.test(block.content) || block.children.some(recursivelyCheckForTodoInBlock);
+function recursivelyCheckForRegexInBlock(block: BlockEntity, regex: RegExp): boolean {
+  return regex.test(block.content) || block.children.some(child => recursivelyCheckForRegexInBlock(child, regex));
 }
 
 export const getLastBlock = async function (
