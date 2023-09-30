@@ -43,18 +43,19 @@ const getNextTodoState = (todoState: string, preferredWorkflow = 'todo') => {
   switch (preferredWorkflow) {
     case 'now':
       return {
-        TODO: 'DONE ',
-        DOING: 'DONE ',
-        DONE: '',
-        '': 'TODO ',
-      }[todoState];
-    default:
-      return {
         LATER: 'DONE ',
         NOW: 'DONE ',
         DONE: '',
         '': 'LATER ',
       }[todoState];
+    default:
+      return {
+        TODO: 'DONE ',
+        DOING: 'DONE ',
+        DONE: '',
+        '': 'TODO ',
+      }[todoState];
+      
   }
 };
 
