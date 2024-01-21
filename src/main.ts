@@ -131,13 +131,13 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
   let isJournal = false;
   for (let datum of txData) {
     // datum structure https://tonsky.me/blog/datascript-internals/
-    if (datum[1] === 'updatedAt' && datum[4] === true) {
+    if ((datum[1] === 'updatedAt' || datum[1] === "block/updated-at") && datum[4] === true) {
       updatedAt = datum[2];
     }
-    if (datum[1] === 'createdAt' && datum[4] === true) {
+    if ((datum[1] === 'createdAt' || datum[1] === "block/created-at") && datum[4] === true) {
       createdAt = datum[2];
     }
-    if (datum[1] === 'journal?' && datum[4] === true) {
+    if ((datum[1] === 'journal?' || datum[1] === "block/journal?") && datum[4] === true) {
       isJournal = datum[2];
     }
   }
