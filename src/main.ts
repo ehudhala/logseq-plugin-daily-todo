@@ -2,15 +2,20 @@ import '@logseq/libs';
 
 import {BlockEntity} from '@logseq/libs/dist/LSPlugin';
 
+const DEBUGGING = false;
 
-const todoRegex = /^(TODO)\s+/;
+const todoRegex = /^(TODO|DOING|NOW|LATER)\s+/;
 const doneRegex = /^(DONE)\s+/;
-const todoDoneRegex = /^(TODO|DONE)\s+/;
+const todoDoneRegex = /^(TODO|DOING|NOW|LATER|DONE)\s+/;
 const isUnderlineRegex = /<ins>.*<\/ins>/;
 
-const highlightRegex = /^(TODO\s+|DONE\s+|\s*)\^\^(.*)\^\^/;
+const highlightRegex =
+  /^(TODO\s+|DOING\s+|NOW\s+|LATER\s+|DONE\s+|\s*)\^\^(.*)\^\^/;
 
 const settingsVersion = 'v1';
+
+const log = DEBUGGING ? console.log : () => {};
+
 export const defaultSettings = {
   keyBindings: {
     'TODO': 'mod+1',
@@ -34,12 +39,24 @@ const initSettings = () => {
   }
 };
 
-const getNextTodoState = (todoState: string) => {
-  return {
-    'TODO': 'DONE ',
-    'DONE': '',
-    '': 'TODO '
-  }[todoState];
+const getNextTodoState = (todoState: string, preferredWorkflow = 'todo') => {
+  switch (preferredWorkflow) {
+    case 'now':
+      return {
+        LATER: 'DONE ',
+        NOW: 'DONE ',
+        DONE: '',
+        '': 'LATER ',
+      }[todoState];
+    default:
+      return {
+        TODO: 'DONE ',
+        DOING: 'DONE ',
+        DONE: '',
+        '': 'TODO ',
+      }[todoState];
+      
+  }
 };
 
 const getSettings = (
@@ -73,7 +90,7 @@ async function toggleHighlight() {
       } else {
         let todoPrefix = extractTodoState(block);
         todoPrefix = todoPrefix !== '' ? todoPrefix + ' ' : todoPrefix;
-        await logseq.Editor.updateBlock(block.uuid,
+        await logseq.Editor.updateBlock(block.uuid, 
           blocksInDifferentStates // we want to just update all blocks to be un-highlighted
             ? block.content
             : todoPrefix + '^^' + block.content.replace(todoDoneRegex, '') + '^^');
@@ -82,7 +99,7 @@ async function toggleHighlight() {
   }
 }
 
-async function toggleTODO() {
+async function toggleTODO(preferredWorkflow = 'todo') {
   const selected = await logseq.Editor.getSelectedBlocks();
   const blocks = (selected && selected.length > 1) ? selected : [await logseq.Editor.getCurrentBlock()];
   const blocksInDifferentStates = (blocks.length > 0 && blocks.some(block => extractTodoState(block) != extractTodoState(blocks[0])));
@@ -94,7 +111,7 @@ async function toggleTODO() {
         : block.content;
       await logseq.Editor.updateBlock(
         block.uuid,
-        getNextTodoState(todoState) + strippedContent
+        getNextTodoState(todoState, preferredWorkflow) + strippedContent
       );
     }
   }
@@ -102,7 +119,7 @@ async function toggleTODO() {
 
 // const updateNewJournalWithAllTODOs = ({path, template}) => {
 //   // This hook is actually called on every route change, fortunately a route change happens when creating a new journal.
-//   console.log(path, template);
+//   log(path, template);
 //   debugger;
 // };
 
@@ -147,16 +164,16 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
   }
 
   const newJournalBlock = blocks.find(block => block.hasOwnProperty('createdAt') && block['journal?'] === true);
-  console.log({newJournalBlock});
+  log({ newJournalBlock });
 
   const prevJournals = await queryCurrentRepoRangeJournals(newJournalBlock['journalDay']);
-  console.log({prevJournals});
+  log({ prevJournals });
   const latestJournal = prevJournals.reduce( // TODO: This aggregation should be handled by the query itself.
     (prev, current) => prev['journal-day'] > current['journal-day'] ? prev : current
   );
-  console.log({latestJournal});
+  log({latestJournal});
   const latestJournalBlocks = await logseq.Editor.getPageBlocksTree(latestJournal.name);
-  console.log({latestJournalBlocks});
+  log({latestJournalBlocks});
 
   let latestJournalBlockGroups = [[]];
   for (let block of latestJournalBlocks) {
@@ -166,7 +183,7 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
       latestJournalBlockGroups.push([]);
     }
   }
-  console.log({latestJournalBlockGroups});
+  log({latestJournalBlockGroups});
 
   let newJournalLastBlock = await getLastBlock(newJournalBlock.name);
   for (let group of latestJournalBlockGroups) {
@@ -184,7 +201,7 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
           }
         }
       }
-      console.log(["inserting block between groups", newJournalLastBlock?.content, newJournalLastBlock, newJournalBlock]);
+      log(["inserting block between groups", newJournalLastBlock?.content, newJournalLastBlock, newJournalBlock]);
       // we add a block twice because the copy updates the last empty block
       await logseq.Editor.appendBlockInPage(newJournalBlock.uuid, ''); // actual separator
       await logseq.Editor.appendBlockInPage(newJournalBlock.uuid, ''); // new block of next group
@@ -206,18 +223,18 @@ async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEn
   }
   let newBlock = lastDestBlock;
   if (lastDestBlock.content !== '') {
-    console.log(["inserting block", srcBlock.content, lastDestBlock.content, srcBlock, lastDestBlock]);
+    log(['inserting block', srcBlock.content, lastDestBlock.content, srcBlock, lastDestBlock]);
     newBlock = await logseq.Editor.insertBlock(lastDestBlock.uuid, srcBlock.content, {
-      sibling: true,
+        sibling: true,
     });
   } else {
-    console.log(["updating block content", srcBlock.content, lastDestBlock.content, srcBlock, lastDestBlock]);
+    log(["updating block content", srcBlock.content, lastDestBlock.content, srcBlock, lastDestBlock]);
     await logseq.Editor.updateBlock(lastDestBlock.uuid, srcBlock.content);
     newBlock.content = srcBlock.content; // update doesn't update the instance.
   }
 
   if (srcBlock.children.length > 0) {
-    console.log(["inserting child block", srcBlock.content, newBlock.content, srcBlock, newBlock]);
+    log(["inserting child block", srcBlock.content, newBlock.content, srcBlock, newBlock]);
     let newChildBlock = await logseq.Editor.insertBlock(newBlock.uuid, '');
     const firstChildBlockUUID = newChildBlock.uuid;
     for (let child of srcBlock.children) {
@@ -227,7 +244,7 @@ async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEn
     }
     if (newChildBlock.uuid === firstChildBlockUUID && newChildBlock.content === '') {
       // Actually all children were DONE, we didn't copy to the empty block.
-      console.log(["removing unused child block", newChildBlock?.content, newChildBlock]);
+      log(["removing unused child block", newChildBlock?.content, newChildBlock]);
       await logseq.Editor.removeBlock(newChildBlock.uuid);
     }
   }
@@ -235,7 +252,7 @@ async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEn
   if (!hasAnyDoneDescendant && (!(isUnderlineRegex.test(srcBlock.content) && groupHasAnyDoneTask))) {
     // we can safely delete the block if it was copied whole
     // we keep underline blocks for groups with done tasks as they are titles
-    console.log(["Removing block from source", srcBlock.content, srcBlock]);
+    log(["Removing block from source", srcBlock.content, srcBlock]);
     await logseq.Editor.removeBlock(srcBlock.uuid);
     isBlockRemoved = true;
   }
@@ -263,6 +280,8 @@ async function main() {
   initSettings();
   const keyBindings = getSettings('keyBindings', {});
 
+  const { preferredWorkflow } = await logseq.App.getUserConfigs();
+
   logseq.App.registerCommandPalette(
     {
       key: `toggle-todo-block`,
@@ -273,7 +292,7 @@ async function main() {
       },
     },
     async () => {
-      await toggleTODO();
+      await toggleTODO(preferredWorkflow);
     }
   );
 
@@ -290,7 +309,7 @@ async function main() {
       await toggleHighlight();
     }
   );
-  logseq.DB.onChanged(async (params) => {
+  logseq.DB.onChanged(async params => {
     await updateNewJournalWithAllTODOs(params);
   });
 
