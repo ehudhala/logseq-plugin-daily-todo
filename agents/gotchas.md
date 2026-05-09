@@ -72,17 +72,22 @@ which means it changes every time you load unpacked, which is fine. The
 plugin's stable identity in the Marketplace comes from the GitHub repo
 slug, not from this id.
 
-## Versions can drift between tag and `package.json`
+## Don't manually bump `package.json`'s version
 
-The publish workflow fires on tag push and bundles `dist/package.json`
-into the release. But `package.json`'s `&quot;version&quot;` is independent from
-the tag name — the workflow doesn't enforce that they match. We've seen
-a real instance where tag `0.0.7` was pushed but `package.json` still
-said `&quot;0.0.6&quot;`, and the Marketplace card showed `0.0.7` while the
-unpacked card showed `0.0.6` for over a year.
+The publish workflow rewrites `package.json` to match the pushed tag,
+builds against that, and commits the bump back to master with
+`[skip ci]`. **Don't edit the version field by hand** — it'll either
+get clobbered by the workflow or, worse, drift in ways the workflow
+can't reconcile.
 
-**Always bump `package.json` *before* tagging.** See
-[`build-and-release.md`](./build-and-release.md) for the checklist.
+To cut a release: `git tag <version>` and push. The workflow handles
+the rest. Full flow in [`build-and-release.md`](./build-and-release.md).
+
+This setup exists because the previous flow (manual bump before tag)
+had real drift: tag `0.0.7` was once pushed while `package.json`
+still said `&quot;0.0.6&quot;`, leaving the Marketplace card at 0.0.7 and the
+unpacked-plugin card at 0.0.6 for over a year. Tag-as-truth makes
+that class of bug impossible.
 
 ## `manualChunks` is not your friend here
 

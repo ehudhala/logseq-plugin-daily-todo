@@ -9,57 +9,99 @@ on:
 env:
   PLUGIN_NAME: logseq-plugin-daily-todo
 
+permissions:
+  contents: write   # Needed to push the package.json version bump back to master
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          # Full history so we can commit the version bump back to master.
+          fetch-depth: 0
+
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20.x"
-      - name: Build
-        id: build
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Sync package.json version with tag
+        id: version_sync
         run: |
-          npm install -g pnpm
-          pnpm install
-          pnpm build
-          mv dist ${{ env.PLUGIN_NAME }}
-          zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
-          tar -cvzf ${{ env.PLUGIN_NAME }}.tar.gz -C ${{ env.PLUGIN_NAME }} .
-          ls
-          echo "::set-output name=tag_name::$(git tag --sort version:refname | tail -n 1)"
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "tag_version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$PKG_VERSION" = "$TAG_VERSION" ]; then
+            echo "package.json already matches tag ($TAG_VERSION); no bump needed"
+            echo "needs_commit=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "rewriting package.json version: $PKG_VERSION -> $TAG_VERSION"
+            node -e "
+              const fs = require('fs');
+              const p = require('./package.json');
+              p.version = '$TAG_VERSION';
+              fs.writeFileSync('./package.json', JSON.stringify(p, null, 2) + '\n');
+            "
+            echo "needs_commit=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Create Release
-        uses: ncipollo/release-action@v1
-        id: create_release
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # Build uses the rewritten package.json above so dist/package.json carries
+        # the tag's version. Run BEFORE we switch branches to commit the bump back.
+        run: pnpm build
+
+      - name: Package dist
+        run: |
+          set -euo pipefail
+          mv dist "${PLUGIN_NAME}"
+          zip -r "${PLUGIN_NAME}.zip" "${PLUGIN_NAME}"
+          tar -cvzf "${PLUGIN_NAME}.tar.gz" -C "${PLUGIN_NAME}" .
+
+      - name: Create release with assets
+        uses: softprops/action-gh-release@v3
+        with:
+          # softprops infers tag name from GITHUB_REF on tag pushes.
+          files: |
+            ${{ env.PLUGIN_NAME }}.zip
+            ${{ env.PLUGIN_NAME }}.tar.gz
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ github.ref }}
-        with:
-          allowUpdates: true
-          draft: false
-          prerelease: false
 
-      - name: Upload zip file
-        id: upload_zip
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ env.PLUGIN_NAME }}.zip
-          asset_name: ${{ env.PLUGIN_NAME }}-${{ steps.build.outputs.tag_name }}.zip
-          asset_content_type: application/zip
-
-      - name: Upload tar.gz file
-        id: upload_metadata
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ env.PLUGIN_NAME }}.tar.gz
-          asset_name: ${{ env.PLUGIN_NAME }}-${{ steps.build.outputs.tag_name }}.tar.gz
-          asset_content_type: application/gzip
+      - name: Commit version bump back to master
+        if: steps.version_sync.outputs.needs_commit == 'true'
+        # Runs LAST so a failed build/release doesn't leave master with a
+        # version bump for an artifact that was never published.
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin master
+          git checkout master
+          # Re-apply the bump on master in case master moved during the workflow
+          TAG_VERSION="${{ steps.version_sync.outputs.tag_version }}"
+          node -e "
+            const fs = require('fs');
+            const p = require('./package.json');
+            if (p.version !== '$TAG_VERSION') {
+              p.version = '$TAG_VERSION';
+              fs.writeFileSync('./package.json', JSON.stringify(p, null, 2) + '\n');
+            }
+          "
+          if git diff --quiet package.json; then
+            echo "package.json on master already matches tag; nothing to commit"
+          else
+            git add package.json
+            git commit -m "chore: bump version to ${TAG_VERSION} [skip ci]"
+            git push origin master
+          fi
