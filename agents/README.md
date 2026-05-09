@@ -12,6 +12,9 @@ and the constraints that should guide future changes.
 
 - [`overview.md`](./overview.md) — what this plugin does and how its
   pieces fit together.
+- [`testing.md`](./testing.md) — the headless E2E suite, dev loop
+  (`pnpm test:e2e:quick`), full suite (`pnpm test:e2e`), and how to
+  author new cases.
 - [`logseq-plugin-loading.md`](./logseq-plugin-loading.md) — how
   Logseq loads plugins, what the &quot;takes too long to load&quot; warning
   measures, and what *doesn't* count toward it.

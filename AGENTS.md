@@ -21,6 +21,7 @@ No UI, no network, no React. All logic lives in `src/main.ts`. The
 | What you're doing | Read this first |
 |---|---|
 | Touching `src/main.ts` for the first time | [`agents/overview.md`](./agents/overview.md) |
+| Running tests / writing tests | [`agents/testing.md`](./agents/testing.md) |
 | Anything that affects bundle/build/load time | [`agents/logseq-plugin-loading.md`](./agents/logseq-plugin-loading.md) and [`agents/perf-testing.md`](./agents/perf-testing.md) |
 | Cutting a release | [`agents/build-and-release.md`](./agents/build-and-release.md) |
 | Debugging something weird | [`agents/gotchas.md`](./agents/gotchas.md) |
@@ -29,12 +30,24 @@ No UI, no network, no React. All logic lives in `src/main.ts`. The
 
 ## How to verify a change
 
+While iterating, run the quick sanity test for fast feedback (~17s):
+
 ```bash
-pnpm build
+pnpm test:e2e:quick
 ```
 
-Builds `dist/`. Validate the result by loading the unpacked dist into
-Logseq manually — see
+Before opening a PR, run the full migration suite (~2min):
+
+```bash
+pnpm test:e2e
+```
+
+Both drive real Logseq via Playwright and assert on the on-disk
+markdown content. macOS only; requires `/Applications/Logseq.app`.
+Full details in [`agents/testing.md`](./agents/testing.md).
+
+`pnpm build` produces `dist/`. Load it unpacked into Logseq to spot-check
+behavior the test suite doesn't cover yet — see
 [`agents/build-and-release.md`](./agents/build-and-release.md).
 
 Load-time can be measured without Logseq using

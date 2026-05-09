@@ -7,13 +7,17 @@
     "icon": "./icon.png"
   },
   "scripts": {
-    "build": "vite build && cp README.md LICENSE icon.png package.json dist/"
+    "build": "vite build && cp README.md LICENSE icon.png package.json dist/",
+    "test:e2e": "bash e2e/run.sh",
+    "test:e2e:quick": "bash e2e/run.sh --quick",
+    "test:e2e:shortcuts": "bash e2e/run.sh --shortcuts"
   },
   "devDependencies": {
     "@types/node": "^18.7.16",
     "@typescript-eslint/eslint-plugin": "^5.36.2",
     "@typescript-eslint/parser": "^5.36.2",
     "eslint": "^8.23.0",
+    "playwright": "^1.59.1",
     "typescript": "^4.8.3",
     "vite": "^3.1.0"
   },
