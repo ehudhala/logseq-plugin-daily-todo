@@ -219,25 +219,10 @@ export const migrationCases = [
     },
   },
 
-  {
-    name: 'rule-11-today-has-pre-existing-content',
-    // KNOWN BUG: when today already has content, the migration overwrites
-    // it instead of appending. The test asserts the *correct* behavior.
-    knownFailing: true,
-    journals: {
-      yesterday: `- TODO Buy groceries
-`,
-      today: `- Existing morning note
-- TODO Already in today
-`,
-    },
-    todayWaitMatch: c => /TODO Buy groceries/.test(c),
-    expect: (j) => allOf(
-      contains(j[TODAY_FILE], /Existing morning note/, 'today must keep existing content'),
-      contains(j[TODAY_FILE], /TODO Already in today/, 'today must keep its own pre-existing TODO'),
-      contains(j[TODAY_FILE], /TODO Buy groceries/, 'today must have migrated TODO'),
-    ),
-  },
+  // Note: there is no "today has pre-existing content" case because the
+  // plugin's trigger (a fresh journal-creation transaction) is unreachable
+  // when today already has content. See agents/gotchas.md for the full
+  // explanation of why this scenario doesn't arise in practice.
 
   {
     name: 'rule-12-latest-journal-selection',

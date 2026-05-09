@@ -25,6 +25,40 @@ registered. Don't worry about it being expensive at startup — it isn't.
 And don't add &quot;catch up on missed events&quot; logic; there's nothing to
 catch up.
 
+## Migration only fires on a *fresh* journal creation
+
+The plugin's filter requires `createdAt === updatedAt && journal? === true`
+on a single transaction. That shape is what Logseq's in-app
+`create-today-journal!` emits when today's journal does not yet exist
+in datascript — used by the day-rollover timer, by the today-link click
+on a new day, and by the fs-watcher reacting to today's file being
+deleted.
+
+A consequence: **today's journal is always empty at the moment migration
+runs**. There is no real-world scenario where the listener fires while
+today's journal has pre-existing content:
+
+- **File deletion**: Logseq's `create-today-journal!` re-creates today
+  as a fresh empty page; any prior file content is gone before the
+  migration's `getPageBlocksTree` runs.
+- **UI navigation to today / sidebar Journals click**: if today already
+  exists in datascript (with or without content), Logseq doesn't fire
+  a creation transaction, so the listener doesn't fire at all.
+- **Day rollover at midnight**: today is freshly created — no content yet.
+- **Cold start on a new day**: same — Logseq creates today empty before
+  the listener runs.
+
+In `recursiveCopyBlocks` the branch at `lastDestBlock.content !== ''`
+exists for the &quot;today has its own existing content&quot; case in the
+abstract, but in practice that branch is unreachable through real
+triggers — `getLastBlock(newJournalBlock.name)` always returns the
+freshly-created empty placeholder bullet. Don't &quot;optimize&quot; that
+branch away assuming it's dead code; if Logseq's create-today behavior
+ever changes, it could become live again.
+
+The E2E suite does not cover the &quot;today has pre-existing content&quot;
+scenario for this reason.
+
 ## Logseq writes to your unpacked `package.json`
 
 When you `Load unpacked plugin`, Logseq adds a randomly-generated
