@@ -1,0 +1,6 @@
+{:meta/version 1
+ :preferred-format :markdown
+ :journal/page-title-format "MMM do, yyyy"
+ :journals-directory "journals"
+ :pages-directory "pages"
+ :feature/enable-journals? true}
