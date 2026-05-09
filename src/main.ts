@@ -205,7 +205,11 @@ async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEn
   // copied from https://github.com/vipzhicheng/logseq-plugin-move-block TODO add note in readme
   let hasAnyDoneDescendant = false;
   if (doneRegex.test(srcBlock.content)) {
-    return [lastDestBlock, true];
+    // DONE blocks stay in source. Signal hasAnyDoneDescendant=true so the
+    // caller (parent block) knows it has a DONE descendant and must NOT
+    // delete itself from source — otherwise this DONE child would be
+    // removed along with the parent's subtree.
+    return [lastDestBlock, false, true];
   }
   let newBlock = lastDestBlock;
   if (lastDestBlock.content !== '') {
