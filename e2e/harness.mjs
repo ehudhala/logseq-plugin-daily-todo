@@ -207,12 +207,36 @@ class HarnessSession {
   // Trigger create-today-journal! by deleting today's file. If today doesn't
   // exist yet, write a placeholder first and wait long enough for Logseq's
   // fs-watcher to debounce.
+  //
+  // After deletion we poll for a few seconds for Logseq to recreate today
+  // (its create-today-journal! responds to the deletion). If the recreation
+  // doesn't happen within the poll window we explicitly re-write a placeholder
+  // and re-delete — sometimes the first deletion is coalesced into a no-op
+  // by Logseq's fs-watcher when datascript still has today's page from a
+  // recent prior reset.
   async triggerMigration() {
     if (!fs.existsSync(this.todayPath)) {
       fs.writeFileSync(this.todayPath, '-\n');
       await this.page.waitForTimeout(4000); // fs-watcher debounce; <4s is flaky
     }
     fs.unlinkSync(this.todayPath);
+    // Poll for up to 5s; if Logseq doesn't recreate today, retry the delete.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const start = Date.now();
+      while (Date.now() - start < 4000) {
+        if (fs.existsSync(this.todayPath)) return;
+        await this.page.waitForTimeout(200);
+      }
+      // Logseq didn't recreate. Re-seed + re-delete to force the trigger.
+      fs.writeFileSync(this.todayPath, '-\n');
+      await this.page.waitForTimeout(2500);
+      if (!fs.existsSync(this.todayPath)) {
+        // The placeholder we wrote got swallowed; bail and let the wait
+        // logic in waitForMigration handle the timeout.
+        return;
+      }
+      fs.unlinkSync(this.todayPath);
+    }
   }
 
   // Wait for Logseq to recreate today's file (signals migration completed).
