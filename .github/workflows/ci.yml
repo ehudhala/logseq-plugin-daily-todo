@@ -1,4 +1,4 @@
-name: E2E
+name: CI
 
 on:
   pull_request:
@@ -8,16 +8,13 @@ on:
 
 # Cancel duplicate runs on the same PR / branch
 concurrency:
-  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  e2e:
-    # macOS runner: lets the existing e2e/run.sh work as-is. The harness
-    # patches /tmp/LogseqPatched.app to honor LOGSEQ_FAKE_HOME (the
-    # macOS-specific HOME-vs-getpwuid workaround). Public repos get
-    # free macOS minutes; this job runs ~5 minutes.
-    runs-on: macos-latest
+  unit:
+    # Vitest unit tests for the pure helpers in src/lib.ts.
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -29,8 +26,95 @@ jobs:
 
       - name: Install pnpm
         # Pin pnpm so CI doesn't drift to a major that requires a newer
-        # Node. Once the toolchain modernization (#30) lands, package.json
+        # Node. Once toolchain modernization (#30) lands, package.json
         # will gain a "packageManager" field and we can switch to corepack.
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        run: pnpm test
+
+  sanity:
+    # Sanity build: confirms the bundle still emits and the single-chunk
+    # invariant holds at the file level. Cheaper than the perf gate.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin
+        run: pnpm build
+
+  performance:
+    # Headless perf gate. Drives perf-test/host.html via Playwright and
+    # asserts the load-time invariants. Build is a prerequisite for the
+    # gate (perf runs against dist/), so it lives in this job too.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        # Needed by scripts/perf.mjs.
+        run: pnpm exec playwright install chromium
+
+      - name: Build plugin
+        run: pnpm build
+
+      - name: Perf gate
+        # Runs scripts/perf.mjs against the just-built dist. Asserts:
+        #   - resourceCount === 1 (the 0.0.8 single-chunk invariant)
+        #   - median load < 800ms
+        run: pnpm perf
+
+  e2e:
+    # Slow gate: drives real Logseq.app via Playwright (~5 min). macOS
+    # runner because the existing e2e/run.sh patches Logseq's electron.js
+    # to honor LOGSEQ_FAKE_HOME — a workaround for macOS's
+    # HOME-vs-getpwuid divergence. Linux Electron honors HOME so the
+    # patch isn't needed, but porting would also need AppImage extraction
+    # and xvfb. Public repos get free macOS minutes.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9.15.0
@@ -79,9 +163,9 @@ jobs:
           ls /Applications/Logseq.app/Contents/MacOS/Logseq
 
       - name: Install Playwright Chromium
-        # Needed by scripts/perf.mjs; the E2E suite uses Playwright's
-        # Electron driver against Logseq.app and doesn't need Chromium,
-        # but install it anyway so a future pnpm verify run works too.
+        # The E2E suite uses Playwright's Electron driver against
+        # Logseq.app and doesn't need Chromium directly, but install
+        # for parity with the verify job.
         run: pnpm exec playwright install chromium
 
       - name: Run E2E suite

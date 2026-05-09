@@ -1,18 +1,33 @@
 # Testing
 
-The plugin has a headless end-to-end test suite that drives real
-Logseq.app via Playwright with an isolated temp profile. It covers the
-journal-migration logic by seeding markdown fixtures, triggering
-`create-today-journal!` via file deletion, and asserting on the
-resulting markdown content (file diffs, not API call counts).
+Two layers:
+
+1. **Unit tests** (Vitest, `pnpm test`) — pure-logic helpers in
+   `src/lib.ts`. <1s per run; ideal inner loop while iterating on
+   regex / state-machine / group-split logic.
+2. **End-to-end tests** (`pnpm test:e2e`) — drive real Logseq.app via
+   Playwright with an isolated temp profile. Cover the journal-migration
+   logic by seeding markdown fixtures, triggering `create-today-journal!`
+   via file deletion, and asserting on the resulting markdown content.
+3. **Perf gate** (`pnpm perf`) — drives `perf-test/host.html` headlessly
+   and asserts the load-time invariants: 1 resource fetch (no chunk
+   splitting), median load < 800ms over loopback.
 
 ## Commands
 
 ```bash
+pnpm test                  # Vitest unit tests (<1s)
+pnpm test:watch            # Vitest in watch mode
+pnpm perf                  # Headless perf gate (~5s)
+pnpm verify                # test + build + perf — the umbrella gate
 pnpm test:e2e:quick        # one mega-migration sanity case (~17s)
-pnpm test:e2e              # full suite — migration + shortcuts (~3m30s)
+pnpm test:e2e              # full E2E suite — migration + shortcuts (~3m30s)
 pnpm test:e2e:shortcuts    # shortcut cases only (~1m30s)
 ```
+
+`pnpm verify` is the canonical "did I break it?" agent gate. It does NOT
+run `pnpm test:e2e` because that needs Logseq.app installed and is
+slower; run E2E separately before opening a PR.
 
 ### Dev loop
 
