@@ -137,10 +137,6 @@ export const migrationCases = [
 
   {
     name: 'rule-7-recursion-mixed-children',
-    // KNOWN BUG: when a parent has mixed children, the DONE child is
-    // currently dropped instead of staying in source. The test asserts
-    // the *correct* behavior — fix the plugin to make this pass.
-    knownFailing: true,
     journals: {
       yesterday: `- TODO Parent task
 \t- TODO Subtask 1
