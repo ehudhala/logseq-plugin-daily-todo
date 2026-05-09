@@ -151,6 +151,9 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
 
   const prevJournals = await queryCurrentRepoRangeJournals(newJournalBlock['journalDay']);
   console.log({prevJournals});
+  if (!prevJournals || prevJournals.length === 0) {
+    return;
+  }
   const latestJournal = prevJournals.reduce( // TODO: This aggregation should be handled by the query itself.
     (prev, current) => prev['journal-day'] > current['journal-day'] ? prev : current
   );
