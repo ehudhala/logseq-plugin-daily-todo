@@ -27,8 +27,13 @@ jobs:
         with:
           node-version: "20.x"
 
-      - name: Enable corepack (pnpm)
-        run: corepack enable
+      - name: Install pnpm
+        # Pin pnpm so CI doesn't drift to a major that requires a newer
+        # Node. Once the toolchain modernization (#30) lands, package.json
+        # will gain a "packageManager" field and we can switch to corepack.
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
