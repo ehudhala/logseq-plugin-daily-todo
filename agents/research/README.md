@@ -23,6 +23,7 @@ Dated investigation logs, one file per topic, named
 | Date | Topic |
 |---|---|
 | 2026-05-09 | [Plugin loading, modernization, testing, and AI-first conventions](./2026-05-09-modernization-ai-first-and-e2e.md) |
+| 2026-05-09 | [Logseq Sync — implications for the plugin](./2026-05-09-logseq-sync-implications.md) |
 
 ## Conventions
 
