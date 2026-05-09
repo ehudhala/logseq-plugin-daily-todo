@@ -10,9 +10,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1024,
     rollupOptions: {
       output: {
-        manualChunks: {
-          logseq: ['@logseq/libs'],
-        },
+        inlineDynamicImports: true,
       },
     },
   },

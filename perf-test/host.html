@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Logseq Plugin Load Harness</title>
+</head>
+<body>
+<h1>Logseq Plugin Load Harness</h1>
+<p>Mirrors what Logseq measures for the &quot;plugin takes too long to load&quot;
+warning: time from iframe append to Postmate <code>handshake-reply</code>.
+See <code>agents/perf-testing.md</code> for usage.</p>
+<div id="results"></div>
+<script>
+const POSTMATE_TYPE = 'application/x-postmate-v1+json';
+
+function isPostmateMessage(e) {
+  return e.data
+    && typeof e.data === 'object'
+    && 'postmate' in e.data
+    && e.data.type === POSTMATE_TYPE;
+}
+
+async function loadPluginOnce(pluginUrl, label, opts = {}) {
+  const container = document.createElement('div');
+  container.style.display = 'none';
+  document.body.appendChild(container);
+
+  const iframe = document.createElement('iframe');
+  iframe.name = 'logseq-plugin-test';
+  iframe.style.cssText = 'width:0;height:0;border:0;';
+  iframe.classList.add('lsp-iframe-sandbox');
+
+  const timings = {
+    s: 0, frameLoadAt: null, firstHandshakeSentAt: null,
+    handshakeReplyAt: null,
+  };
+
+  let onMessage;
+  let handshakeInterval = null;
+
+  const handshakeDone = new Promise((resolve) => {
+    onMessage = (e) => {
+      if (!isPostmateMessage(e)) return;
+      if (e.data.postmate === 'handshake-reply') {
+        timings.handshakeReplyAt = performance.now();
+        clearInterval(handshakeInterval);
+        resolve();
+      }
+    };
+    window.addEventListener('message', onMessage);
+  });
+
+  // Match Logseq's 8s handshake timeout
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('handshake timeout 8s')), 8000)
+  );
+
+  // Append iframe + set src — start the timer (mirrors LSPlugin.core perfInfo.s)
+  container.appendChild(iframe);
+  timings.s = performance.now();
+  iframe.src = pluginUrl;
+
+  // After iframe load, post handshakes every 500ms (mirrors postmate behavior)
+  iframe.addEventListener('load', () => {
+    timings.frameLoadAt = performance.now();
+    const sendHandshake = () => {
+      if (timings.firstHandshakeSentAt === null) {
+        timings.firstHandshakeSentAt = performance.now();
+      }
+      try {
+        iframe.contentWindow.postMessage(
+          { postmate: 'handshake', type: POSTMATE_TYPE,
+            model: { baseInfo: { id: 'daily-todo' } } },
+          '*'
+        );
+      } catch (e) {}
+    };
+    sendHandshake();
+    handshakeInterval = setInterval(sendHandshake, 500);
+  });
+
+  try {
+    await Promise.race([handshakeDone, timeout]);
+  } catch (err) {
+    clearInterval(handshakeInterval);
+    window.removeEventListener('message', onMessage);
+    return { label, error: err.message, ...timings };
+  }
+
+  await new Promise(r => setTimeout(r, 300));
+  window.removeEventListener('message', onMessage);
+
+  let resources = [];
+  try {
+    resources = iframe.contentWindow.performance.getEntriesByType('resource').map(r => ({
+      name: r.name.split('/').pop(),
+      type: r.initiatorType,
+      duration: Math.round(r.duration),
+      startTime: Math.round(r.startTime),
+      transferSize: r.transferSize,
+      decodedBodySize: r.decodedBodySize,
+    }));
+    resources.sort((a, b) => a.startTime - b.startTime);
+  } catch (e) {}
+
+  if (!opts.keep) container.remove();
+
+  return {
+    label,
+    pluginUrl,
+    elapsedMs: Math.round(timings.handshakeReplyAt - timings.s),
+    frameLoadMs: timings.frameLoadAt !== null
+      ? Math.round(timings.frameLoadAt - timings.s) : null,
+    firstHandshakeSentMs: timings.firstHandshakeSentAt !== null
+      ? Math.round(timings.firstHandshakeSentAt - timings.s) : null,
+    resources,
+  };
+}
+
+window.runHarness = async function (pluginUrl, label, opts) {
+  const result = await loadPluginOnce(pluginUrl, label, opts);
+  const out = document.getElementById('results');
+  const pre = document.createElement('pre');
+  pre.textContent = label + ':\n' + JSON.stringify(result, null, 2);
+  out.appendChild(pre);
+  return result;
+};
+
+window.runHarnessN = async function (pluginUrl, label, n = 5) {
+  const runs = [];
+  for (let i = 0; i < n; i++) {
+    runs.push(await loadPluginOnce(pluginUrl, label + ' #' + (i + 1)));
+    await new Promise(res => setTimeout(res, 50));
+  }
+  const elapsed = runs.filter(r => !r.error).map(r => r.elapsedMs).sort((a, b) => a - b);
+  const median = elapsed.length ? elapsed[Math.floor(elapsed.length / 2)] : null;
+  const summary = {
+    label,
+    median,
+    min: elapsed[0] ?? null,
+    max: elapsed[elapsed.length - 1] ?? null,
+    runs: elapsed,
+    resourceCount: runs[0]?.resources?.length ?? null,
+    resources0: runs[0]?.resources ?? null,
+  };
+  const out = document.getElementById('results');
+  const pre = document.createElement('pre');
+  pre.textContent = label + ':\n' + JSON.stringify(summary, null, 2);
+  out.appendChild(pre);
+  return summary;
+};
+</script>
+</body>
+</html>
