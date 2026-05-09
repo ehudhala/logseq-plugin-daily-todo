@@ -4,6 +4,8 @@
   "license": "MIT",
   "main": "index.html",
   "logseq": {
+    "id": "logseq-plugin-daily-todo",
+    "title": "Daily TODO",
     "icon": "./icon.png"
   },
   "scripts": {
