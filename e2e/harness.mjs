@@ -283,9 +283,14 @@ class HarnessSession {
   }
 
   // Press a keyboard shortcut. Use Meta on macOS for `mod`.
+  // After firing, press Escape to exit edit mode so the next click
+  // can re-focus a block via .block-content (which isn't rendered
+  // while the editor is open over it).
   async pressShortcut(combo) {
     await this.page.keyboard.press(combo);
     await this.page.waitForTimeout(400); // wait for Logseq to flush edit to disk
+    await this.page.keyboard.press('Escape');
+    await this.page.waitForTimeout(200);
   }
 
   // Navigate to a specific page
@@ -356,6 +361,9 @@ class HarnessSession {
   async runShortcutCase(c) {
     const t0 = Date.now();
     logCase(c.name, 'starting');
+    // Defensive: if a previous case left the editor open, close it first
+    await this.page.keyboard.press('Escape').catch(() => {});
+    await this.page.waitForTimeout(200);
     await this.resetGraph();
     // Always seed content under 'yesterday' regardless of what the case
     // declares — gives us a stable page Logseq won't auto-rewrite.

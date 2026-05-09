@@ -2,9 +2,9 @@
 // it via fs-based reset, prints summary, exits non-zero on any failure.
 //
 // Usage:
-//   node e2e/runner.mjs              # full migration suite (~2min)
+//   node e2e/runner.mjs              # full suite (~3-4min)
 //   node e2e/runner.mjs --quick      # mega-migration sanity case (~15s)
-//   node e2e/runner.mjs --shortcuts  # shortcut cases only (work in progress)
+//   node e2e/runner.mjs --shortcuts  # shortcut cases only
 
 import { launch } from './harness.mjs';
 import { migrationCases } from './cases/migration.mjs';
@@ -32,6 +32,10 @@ async function main() {
       console.log('=== Migration cases ===');
       for (const c of migrationCases) {
         await session.runMigrationCase(c);
+      }
+      console.log('=== Shortcut cases ===');
+      for (const c of shortcutCases) {
+        await session.runShortcutCase(c);
       }
     }
     const ok = session.printSummary();

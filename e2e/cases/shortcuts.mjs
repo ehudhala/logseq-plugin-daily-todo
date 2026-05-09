@@ -38,9 +38,6 @@ export const shortcutCases = [
 
   {
     name: 'mod1-done-becomes-blank',
-    // FLAKY: works manually but Playwright keystroke into editor doesn't
-    // always flush before assertion. Marked known-fail; investigate later.
-    knownFailing: true,
     journals: { today: `- DONE Buy groceries\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [{ press: 'Meta+1' }],
@@ -52,12 +49,6 @@ export const shortcutCases = [
 
   {
     name: 'mod1-full-cycle-blank-todo-done-blank',
-    // KNOWN: re-focusing a block after a shortcut keystroke is racy because
-    // Logseq's UI re-renders may temporarily hide the previously-edited
-    // block from .block-content selectors. Single-keystroke cases work;
-    // chained keystrokes against the same block need a different focus
-    // strategy (e.g. send Escape after each press, then re-locate).
-    knownFailing: true,
     journals: { today: `- Buy groceries\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [
@@ -92,12 +83,8 @@ export const shortcutCases = [
 
   {
     name: 'mod4-preserves-todo-prefix',
-    // FLAKY: same root cause as mod1-done-becomes-blank — keystroke into
-    // editor on a block that already has a prefix (TODO/DONE/^^) doesn't
-    // flush. Plain-block shortcuts work; prefix-block shortcuts don't.
     // The plugin's highlight regex is /^(TODO\s+|DONE\s+|\s*)\^\^(.*)\^\^/
     // so toggling highlight off should preserve the TODO prefix.
-    knownFailing: true,
     journals: { today: `- TODO ^^Buy groceries^^\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [{ press: 'Meta+4' }],

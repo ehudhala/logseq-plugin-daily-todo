@@ -10,8 +10,8 @@ resulting markdown content (file diffs, not API call counts).
 
 ```bash
 pnpm test:e2e:quick        # one mega-migration sanity case (~17s)
-pnpm test:e2e              # full migration suite (~2m15s)
-pnpm test:e2e:shortcuts    # shortcut cases (work in progress)
+pnpm test:e2e              # full suite — migration + shortcuts (~3m30s)
+pnpm test:e2e:shortcuts    # shortcut cases only (~1m30s)
 ```
 
 ### Dev loop
@@ -95,10 +95,33 @@ instead of providing a `todayWaitMatch` — the harness will skip the
 
 ## Authoring a new shortcut case
 
-The shortcut harness path is **work in progress**. Plain-block toggles
-(`Meta+1` on a blank block, `Meta+4` on a blank block) work reliably,
-but toggles on already-prefixed blocks (TODO → DONE, ^^...^^ → plain)
-are flaky because the editor state and disk-flush timing don't always
-align. See `e2e/cases/shortcuts.mjs` for the cases marked `knownFailing`
-with explanations. If you fix these, removing the flag will surface the
-fix as `UNEXPECTED-PASS`.
+Shortcut cases run against `yesterday`'s journal (Logseq's
+`create-today-journal!` races on-disk seeds for today's file, so the
+harness remaps any case that declares content under `today` to
+`yesterday`). After each keystroke the harness sends `Escape` to commit
+the edit and close the editor; without that, Logseq keeps the editor
+open over the just-edited block, hiding `.block-content` for that block
+and making subsequent re-focus calls miss.
+
+```js
+{
+  name: 'descriptive-case-name',
+  journals: { today: `- Buy groceries\n- Pay bills\n` },
+  focusText: 'Buy groceries',          // substring match on .block-content
+  actions: [{ press: 'Meta+1' }],      // mod = Meta on macOS
+  expect: (j) => contains(j[YDAY_FILE], /^- TODO Buy groceries$/m, '...'),
+}
+```
+
+Multiple presses on the same block work too — re-pass `focusText` in
+each action object so the harness re-locates the block after each
+keystroke (the editor closes on Escape after every press, so the block
+re-renders in `.block-content`):
+
+```js
+actions: [
+  { press: 'Meta+1' },                                    // → TODO
+  { focusText: 'Buy groceries', press: 'Meta+1' },        // → DONE
+  { focusText: 'Buy groceries', press: 'Meta+1' },        // → blank
+],
+```
