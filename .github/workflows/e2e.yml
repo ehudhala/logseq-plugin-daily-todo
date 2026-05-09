@@ -1,0 +1,96 @@
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Cancel duplicate runs on the same PR / branch
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    # macOS runner: lets the existing e2e/run.sh work as-is. The harness
+    # patches /tmp/LogseqPatched.app to honor LOGSEQ_FAKE_HOME (the
+    # macOS-specific HOME-vs-getpwuid workaround). Public repos get
+    # free macOS minutes; this job runs ~5 minutes.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin
+        run: pnpm build
+
+      # Logseq.app cache. The DMG is ~150MB; downloading every run is wasteful.
+      # Pin LOGSEQ_VERSION so cache misses only happen on intentional bumps.
+      - name: Cache Logseq.app
+        id: cache-logseq
+        uses: actions/cache@v4
+        with:
+          path: /Applications/Logseq.app
+          key: logseq-app-${{ env.LOGSEQ_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+        env:
+          LOGSEQ_VERSION: 0.10.15
+
+      - name: Download and install Logseq
+        if: steps.cache-logseq.outputs.cache-hit != 'true'
+        env:
+          LOGSEQ_VERSION: 0.10.15
+        run: |
+          set -euo pipefail
+          # GitHub macos-latest runners are arm64 as of 2026.
+          ARCH="$(uname -m)"
+          if [ "$ARCH" = "arm64" ]; then
+            DMG_NAME="Logseq-darwin-arm64-${LOGSEQ_VERSION}.dmg"
+          else
+            DMG_NAME="Logseq-darwin-x64-${LOGSEQ_VERSION}.dmg"
+          fi
+          URL="https://github.com/logseq/logseq/releases/download/${LOGSEQ_VERSION}/${DMG_NAME}"
+          echo "Downloading $URL"
+          curl -fL -o /tmp/Logseq.dmg "$URL"
+          # Mount, copy, eject
+          MOUNT_POINT=$(hdiutil attach -nobrowse -noverify -noautoopen /tmp/Logseq.dmg | tail -1 | awk '{print $3}')
+          echo "Mounted at $MOUNT_POINT"
+          cp -R "$MOUNT_POINT/Logseq.app" /Applications/
+          hdiutil detach "$MOUNT_POINT"
+          rm /tmp/Logseq.dmg
+          # Quarantine flag would prompt Gatekeeper on first launch; strip it
+          xattr -dr com.apple.quarantine /Applications/Logseq.app || true
+          ls /Applications/Logseq.app/Contents/MacOS/Logseq
+
+      - name: Install Playwright Chromium
+        # Needed by scripts/perf.mjs; the E2E suite uses Playwright's
+        # Electron driver against Logseq.app and doesn't need Chromium,
+        # but install it anyway so a future pnpm verify run works too.
+        run: pnpm exec playwright install chromium
+
+      - name: Run E2E suite
+        run: pnpm test:e2e
+        env:
+          # Disable color codes that break GitHub Actions log parsing
+          NO_COLOR: "1"
+
+      - name: Upload Logseq logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logseq-e2e-logs
+          path: |
+            /tmp/logseq-e2e-*
+          if-no-files-found: ignore
+          retention-days: 7
