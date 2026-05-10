@@ -30,10 +30,10 @@ No UI, no network, no React. All logic lives in `src/main.ts`. The
 
 ## How to verify a change
 
-The canonical agent gate (no Logseq needed, ~5s):
+The canonical agent gate (no Logseq needed, ~30s):
 
 ```bash
-pnpm verify          # test + build + perf
+pnpm verify          # check + lint + test + build + perf
 ```
 
 Inner-loop iteration on pure logic:
@@ -58,10 +58,6 @@ Full details in [`agents/testing.md`](./agents/testing.md).
 - **Never re-introduce `manualChunks` for `@logseq/libs`.** It looks
   like a vendor-cache optimization but isn't; explanation in
   [`agents/gotchas.md`](./agents/gotchas.md).
-- **Don't bump `@logseq/libs` past 0.0.x without fixing the SDK call
-  sites** — three breakages in `src/main.ts` (`block.left`,
-  `block.content`, `journal?`/`journalDay`) are documented in the
-  current research doc under §2.
 
 ## What's out of scope
 

@@ -25,7 +25,7 @@ export const shortcutCases = [
     journals: { today: `- Buy groceries\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [{ press: 'Meta+1' }],
-    expect: (j) => contains(j[TARGET], /^- TODO Buy groceries$/m, 'first block became TODO'),
+    expect: j => contains(j[TARGET], /^- TODO Buy groceries$/m, 'first block became TODO'),
   },
 
   {
@@ -33,7 +33,7 @@ export const shortcutCases = [
     journals: { today: `- TODO Buy groceries\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [{ press: 'Meta+1' }],
-    expect: (j) => contains(j[TARGET], /^- DONE Buy groceries$/m, 'first block became DONE'),
+    expect: j => contains(j[TARGET], /^- DONE Buy groceries$/m, 'first block became DONE'),
   },
 
   {
@@ -41,7 +41,7 @@ export const shortcutCases = [
     journals: { today: `- DONE Buy groceries\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [{ press: 'Meta+1' }],
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TARGET], /^- Buy groceries$/m, 'first block back to plain'),
       notContains(j[TARGET], /^- (TODO|DONE) Buy groceries$/m, 'no TODO/DONE prefix'),
     ),
@@ -56,7 +56,7 @@ export const shortcutCases = [
       { focusText: 'Buy groceries', press: 'Meta+1' }, // → DONE
       { focusText: 'Buy groceries', press: 'Meta+1' }, // → blank
     ],
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TARGET], /^- Buy groceries$/m, 'block back to plain'),
       notContains(j[TARGET], /^- (TODO|DONE) Buy groceries$/m, 'no prefix'),
     ),
@@ -67,7 +67,7 @@ export const shortcutCases = [
     journals: { today: `- Buy groceries\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [{ press: 'Meta+4' }],
-    expect: (j) => contains(j[TARGET], /^- \^\^Buy groceries\^\^$/m, 'first block highlighted'),
+    expect: j => contains(j[TARGET], /^- \^\^Buy groceries\^\^$/m, 'first block highlighted'),
   },
 
   {
@@ -75,7 +75,7 @@ export const shortcutCases = [
     journals: { today: `- ^^Buy groceries^^\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [{ press: 'Meta+4' }],
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TARGET], /^- Buy groceries$/m, 'highlight removed'),
       notContains(j[TARGET], /\^\^Buy groceries\^\^/, 'no ^^ wrap remains'),
     ),
@@ -88,7 +88,7 @@ export const shortcutCases = [
     journals: { today: `- TODO ^^Buy groceries^^\n- Pay bills\n` },
     focusText: 'Buy groceries',
     actions: [{ press: 'Meta+4' }],
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TARGET], /^- TODO Buy groceries$/m, 'TODO prefix preserved after un-highlighting'),
       notContains(j[TARGET], /\^\^/, 'no ^^ remains'),
     ),

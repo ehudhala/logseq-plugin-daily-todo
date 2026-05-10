@@ -23,11 +23,11 @@ const EXEC = `${PATCHED_APP}/Contents/MacOS/Logseq`;
 
 // Real-system-clock dates so Logseq's create-today-journal! lines up
 function fmtFile(d) {
-  return `${d.getFullYear()}_${String(d.getMonth()+1).padStart(2,'0')}_${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}_${String(d.getMonth()+1).padStart(2, '0')}_${String(d.getDate()).padStart(2, '0')}`;
 }
 function ord(n) {
   if (n >= 11 && n <= 13) return `${n}th`;
-  return `${n}${['th','st','nd','rd','th','th','th','th','th','th'][n%10]}`;
+  return `${n}${['th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th'][n%10]}`;
 }
 function fmtPretty(d) {
   return `${d.toLocaleString('en-US', { month: 'long' })} ${ord(d.getDate())}, ${d.getFullYear()}`;
@@ -116,7 +116,7 @@ export async function launch() {
   await page.waitForTimeout(2000);
 
   const consoleLines = [];
-  page.on('console', m => consoleLines.push(`[+${Date.now()-t0}ms ${m.type()}] ${m.text().slice(0,300)}`));
+  page.on('console', m => consoleLines.push(`[+${Date.now()-t0}ms ${m.type()}] ${m.text().slice(0, 300)}`));
 
   // Open the fixture graph via welcome screen
   await page.goto(page.url().split('#')[0] + '#/repo/add').catch(() => {});
@@ -132,7 +132,7 @@ export async function launch() {
   }, { timeoutMs: 20000, label: 'graph open' });
 
   await waitFor(async () => {
-    return await page.evaluate((dist) => {
+    return await page.evaluate(dist => {
       const core = globalThis.LSPluginCore;
       if (!core) return false;
       const ps = Array.from(core.registeredPlugins?.entries?.() || []);
@@ -199,7 +199,7 @@ class HarnessSession {
       const p = path.join(this.journalsDir, `${slug}.md`);
       const actual = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '<missing>';
       if (actual !== content) {
-        console.log(`  [seed] WARN ${slug}.md drift after parse:\n    expected:\n${content.replace(/^/gm,'      ')}    actual:\n${actual.replace(/^/gm,'      ')}`);
+        console.log(`  [seed] WARN ${slug}.md drift after parse:\n    expected:\n${content.replace(/^/gm, '      ')}    actual:\n${actual.replace(/^/gm, '      ')}`);
       }
     }
   }
@@ -264,14 +264,14 @@ class HarnessSession {
   async focusBlockByText(text) {
     try {
       // Locate the matching block, get its index among .block-content
-      const idx = await this.page.evaluate((t) => {
+      const idx = await this.page.evaluate(t => {
         const all = [...document.querySelectorAll('.block-content')];
         return all.findIndex(el => el.textContent && el.textContent.includes(t));
       }, text);
       if (idx < 0) {
         // Wait for it to render
         await waitFor(async () => {
-          return await this.page.evaluate((t) => {
+          return await this.page.evaluate(t => {
             return [...document.querySelectorAll('.block-content')].some(
               el => el.textContent && el.textContent.includes(t)
             );
@@ -319,7 +319,7 @@ class HarnessSession {
 
   // Navigate to a specific page
   async navigateToPage(pageName) {
-    await this.page.evaluate((name) => {
+    await this.page.evaluate(name => {
       location.hash = '#/page/' + encodeURIComponent(name);
     }, pageName);
     await this.page.waitForTimeout(1500);

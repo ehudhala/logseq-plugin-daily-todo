@@ -11,10 +11,6 @@
 
 import { TODAY_FILE, YDAY_FILE } from '../harness.mjs';
 
-const eq = (actual, expected) => actual === expected
-  ? null
-  : `expected:\n---\n${expected}---\nactual:\n---\n${actual}---\n`;
-
 const contains = (s, regex, label) =>
   regex.test(s) ? null : `${label}: missing ${regex} in:\n${s}`;
 
@@ -33,7 +29,7 @@ export const migrationCases = [
       today: '-\n',
     },
     todayWaitMatch: c => /TODO Buy groceries/.test(c),
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TODAY_FILE], /TODO Buy groceries/, 'today missing first TODO'),
       contains(j[TODAY_FILE], /TODO Call mom/, 'today missing second TODO'),
       notContains(j[YDAY_FILE], /TODO Buy groceries/, 'yesterday should be empty'),
@@ -50,7 +46,7 @@ export const migrationCases = [
       today: '-\n',
     },
     todayWaitMatch: c => /TODO Buy groceries/.test(c),
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TODAY_FILE], /TODO Buy groceries/, 'today missing TODO'),
       contains(j[TODAY_FILE], /TODO Call mom/, 'today missing second TODO'),
       notContains(j[TODAY_FILE], /DONE Pay bills/, 'today should not have DONE'),
@@ -68,7 +64,7 @@ export const migrationCases = [
       today: '-\n',
     },
     noMigrationExpected: true,
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[YDAY_FILE], /DONE Pay bills/, 'yday must keep all DONE'),
       contains(j[YDAY_FILE], /DONE Email client/, 'yday must keep all DONE'),
       notContains(j[TODAY_FILE] || '', /DONE/, 'today should not have any DONE'),
@@ -85,7 +81,7 @@ export const migrationCases = [
       today: '-\n',
     },
     todayWaitMatch: c => /TODO Write proposal/.test(c),
-    expect: (j) => allOf(
+    expect: j => allOf(
       // Title duplicates: present in both
       contains(j[TODAY_FILE], /<ins>Project A<\/ins>/, 'today missing duplicated title'),
       contains(j[YDAY_FILE], /<ins>Project A<\/ins>/, 'yday missing kept title'),
@@ -107,7 +103,7 @@ export const migrationCases = [
       today: '-\n',
     },
     todayWaitMatch: c => /<ins>Project B<\/ins>/.test(c),
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TODAY_FILE], /<ins>Project B<\/ins>/, 'today missing title'),
       contains(j[TODAY_FILE], /TODO Design/, 'today missing first TODO child'),
       contains(j[TODAY_FILE], /TODO Build/, 'today missing second TODO child'),
@@ -126,7 +122,7 @@ export const migrationCases = [
       today: '-\n',
     },
     todayWaitMatch: c => /TODO First/.test(c),
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TODAY_FILE], /TODO First/, 'today missing TODO'),
       contains(j[YDAY_FILE], /DONE Already done/, 'yday missing DONE'),
       notContains(j[YDAY_FILE], /TODO First/, 'yday should not have TODO'),
@@ -146,7 +142,7 @@ export const migrationCases = [
       today: '-\n',
     },
     todayWaitMatch: c => /TODO Parent task/.test(c),
-    expect: (j) => allOf(
+    expect: j => allOf(
       // Parent migrates (or duplicates as title) because it has TODO descendants
       contains(j[TODAY_FILE], /TODO Parent task/, 'today missing parent'),
       contains(j[TODAY_FILE], /TODO Subtask 1/, 'today missing TODO subtask'),
@@ -168,7 +164,7 @@ export const migrationCases = [
       today: '-\n',
     },
     todayWaitMatch: c => /TODO Group A task/.test(c) && /TODO Group B task/.test(c),
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TODAY_FILE], /TODO Group A task/, 'today missing group A'),
       contains(j[TODAY_FILE], /TODO Group B task/, 'today missing group B'),
       notContains(j[TODAY_FILE], /DONE Group C done/, 'today should not have group C (all-DONE)'),
@@ -185,7 +181,7 @@ export const migrationCases = [
       today: '-\n',
     },
     noMigrationExpected: true,
-    expect: (j) => {
+    expect: j => {
       // Today should remain empty/no migration. No crash. (Empty graph case
       // exercises the prevJournals === [] early-return path.)
       const t = j[TODAY_FILE] || '';
@@ -205,7 +201,7 @@ export const migrationCases = [
       today: '-\n',
     },
     noMigrationExpected: true,
-    expect: (j) => {
+    expect: j => {
       // Yesterday has no TODOs → no group qualifies → no migration.
       const t = j[TODAY_FILE] || '';
       if (/Just a plain note|Another plain line/.test(t)) {
@@ -234,7 +230,7 @@ export const migrationCases = [
       today: '-\n',
     },
     todayWaitMatch: c => /From actual yesterday/.test(c),
-    expect: (j) => allOf(
+    expect: j => allOf(
       contains(j[TODAY_FILE], /TODO From actual yesterday/, 'today must have actual-yesterday TODO'),
       notContains(j[TODAY_FILE], /from 2024/, 'today should not have 2024 TODO'),
       notContains(j[TODAY_FILE], /from 2025/, 'today should not have 2025 TODO'),
