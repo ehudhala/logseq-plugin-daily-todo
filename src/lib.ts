@@ -5,19 +5,43 @@
 // right shape and they work. main.ts uses them with full BlockEntity
 // instances at runtime.
 
-export const todoRegex = /^(TODO)\s+/;
+// TODO-like prefixes — Logseq supports two workflows:
+//   "todo" workflow: TODO / DOING / DONE
+//   "now"  workflow: LATER / NOW / DONE
+// We recognize all four TODO-like prefixes (TODO/DOING/NOW/LATER) so
+// the plugin works with mixed content regardless of which workflow the
+// user has selected. Only the blank → first-state transition depends
+// on the workflow; everything else (any TODO-like → DONE → blank) is
+// the same across workflows.
+export const todoRegex = /^(TODO|DOING|NOW|LATER)\s+/;
 export const doneRegex = /^(DONE)\s+/;
-export const todoDoneRegex = /^(TODO|DONE)\s+/;
+export const todoDoneRegex = /^(TODO|DOING|NOW|LATER|DONE)\s+/;
 export const isUnderlineRegex = /<ins>.*<\/ins>/;
-export const highlightRegex = /^(TODO\s+|DONE\s+|\s*)\^\^(.*)\^\^/;
+export const highlightRegex = /^(TODO\s+|DOING\s+|NOW\s+|LATER\s+|DONE\s+|\s*)\^\^(.*)\^\^/;
 
-// Cycle TODO state: '' → 'TODO ' → 'DONE ' → ''.
-export const getNextTodoState = (todoState: string): string => {
-  return ({
-    'TODO': 'DONE ',
-    'DONE': '',
-    '': 'TODO ',
-  } as Record<string, string>)[todoState] ?? '';
+// Logseq's two task workflows. The string values match what
+// `logseq.App.getUserConfigs().preferredWorkflow` returns.
+export type PreferredWorkflow = 'todo' | 'now';
+
+// Cycle TODO state. Any TODO-like prefix (TODO/DOING/NOW/LATER) maps
+// to DONE — the workflow only determines the blank → first-state
+// transition (TODO in "todo" mode, LATER in "now" mode). This means a
+// TODO block in a now-mode user's graph still cycles cleanly to DONE
+// instead of getting stuck.
+export const getNextTodoState = (
+  todoState: string,
+  preferredWorkflow: PreferredWorkflow = 'todo',
+): string => {
+  if (todoState === 'DONE') return '';
+  if (todoState === '') return preferredWorkflow === 'now' ? 'LATER ' : 'TODO ';
+  // Any recognized TODO-like prefix advances to DONE.
+  if (todoState === 'TODO' || todoState === 'DOING'
+      || todoState === 'NOW' || todoState === 'LATER') {
+    return 'DONE ';
+  }
+  // Unknown state — leave it alone (mapping to '' would silently strip
+  // a prefix the user added manually).
+  return '';
 };
 
 // A minimal block shape that matches both legacy and modern

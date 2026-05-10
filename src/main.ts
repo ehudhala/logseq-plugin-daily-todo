@@ -19,11 +19,14 @@ import {
   highlightRegex,
   isHighlighted,
   isUnderlineRegex,
+  PreferredWorkflow,
   recursivelyCheckForRegexInBlock,
   splitBlocksIntoGroups,
   todoDoneRegex,
   todoRegex,
 } from './lib';
+
+import { log, error } from './log';
 
 // Find the block immediately before `block` among its siblings. The legacy
 // API was `block.left.id`, but `BlockEntity.left` was removed in newer
@@ -114,7 +117,18 @@ async function toggleHighlight() {
   }
 }
 
+// Read Logseq's user-level workflow preference. Logseq's setting is
+// Settings → Editor → "Preferred workflow", with values 'todo' or 'now'.
+// We re-read on every toggle so the user doesn't have to reload the
+// plugin after changing it. getUserConfigs() is cheap (a postmessage
+// roundtrip) and a manual cmd+1 press is rare, so this isn't hot-path.
+async function readPreferredWorkflow(): Promise<PreferredWorkflow> {
+  const cfg = await logseq.App.getUserConfigs() as { preferredWorkflow?: string };
+  return cfg?.preferredWorkflow === 'now' ? 'now' : 'todo';
+}
+
 async function toggleTODO() {
+  const preferredWorkflow = await readPreferredWorkflow();
   const selected = await logseq.Editor.getSelectedBlocks();
   const blocks = (selected && selected.length > 1) ? selected : [await logseq.Editor.getCurrentBlock()];
   const blocksInDifferentStates = (blocks.length > 0 && blocks.some(block => extractTodoState(block) != extractTodoState(blocks[0])));
@@ -127,7 +141,7 @@ async function toggleTODO() {
         : content;
       await logseq.Editor.updateBlock(
         block.uuid,
-        getNextTodoState(todoState) + strippedContent
+        getNextTodoState(todoState, preferredWorkflow) + strippedContent
       );
     }
   }
@@ -152,7 +166,7 @@ async function queryCurrentRepoRangeJournals(untilDate: number): Promise<Journal
     `);
     return (journals || []).flat();
   } catch (e) {
-    console.error(e);
+    error(e);
   }
 }
 
@@ -199,28 +213,28 @@ async function updateNewJournalWithAllTODOs({ blocks, txData }: OnChangedPayload
       Object.prototype.hasOwnProperty.call(block, 'createdAt') &&
       (block as JournalPageBlock)['journal?'] === true
   );
-  console.log({ newJournalBlock });
+  log({ newJournalBlock });
   if (!newJournalBlock || newJournalBlock.journalDay === undefined) return;
 
   const prevJournals = await queryCurrentRepoRangeJournals(newJournalBlock.journalDay);
-  console.log({ prevJournals });
+  log({ prevJournals });
   if (!prevJournals || prevJournals.length === 0) {
     return;
   }
   const latestJournal = prevJournals.reduce( // TODO: This aggregation should be handled by the query itself.
     (prev: JournalPage, current: JournalPage) => prev['journal-day'] > current['journal-day'] ? prev : current
   );
-  console.log({ latestJournal });
+  log({ latestJournal });
   const latestJournalBlocks = await logseq.Editor.getPageBlocksTree(latestJournal.name);
-  console.log({ latestJournalBlocks });
+  log({ latestJournalBlocks });
 
   const latestJournalBlockGroups = splitBlocksIntoGroups(latestJournalBlocks);
-  console.log({ latestJournalBlockGroups });
+  log({ latestJournalBlockGroups });
 
   let newJournalLastBlock = await getLastBlock(newJournalBlock.name);
   if (!newJournalLastBlock) {
     // Today is somehow blockless — bail rather than crashing in the loop.
-    console.log('newJournalLastBlock is null, skipping migration');
+    log('newJournalLastBlock is null, skipping migration');
     return;
   }
   for (const group of latestJournalBlockGroups) {
@@ -239,7 +253,7 @@ async function updateNewJournalWithAllTODOs({ blocks, txData }: OnChangedPayload
           }
         }
       }
-      console.log(['inserting block between groups', blockContent(newJournalLastBlock), newJournalLastBlock, newJournalBlock]);
+      log(['inserting block between groups', blockContent(newJournalLastBlock), newJournalLastBlock, newJournalBlock]);
       // we add a block twice because the copy updates the last empty block
       await logseq.Editor.appendBlockInPage(newJournalBlock.uuid, ''); // actual separator
       await logseq.Editor.appendBlockInPage(newJournalBlock.uuid, ''); // new block of next group
@@ -280,14 +294,14 @@ async function recursiveCopyBlocks(
   let newBlock: BlockEntity = lastDestBlock;
   const lastDestContent = blockContent(lastDestBlock);
   if (lastDestContent !== '') {
-    console.log(['inserting block', srcContent, lastDestContent, srcBlock, lastDestBlock]);
+    log(['inserting block', srcContent, lastDestContent, srcBlock, lastDestBlock]);
     const inserted = await logseq.Editor.insertBlock(lastDestBlock.uuid, srcContent, {
       sibling: true,
     });
     if (!inserted) throw new Error(`insertBlock returned null for ${srcContent}`);
     newBlock = inserted;
   } else {
-    console.log(['updating block content', srcContent, lastDestContent, srcBlock, lastDestBlock]);
+    log(['updating block content', srcContent, lastDestContent, srcBlock, lastDestBlock]);
     await logseq.Editor.updateBlock(lastDestBlock.uuid, srcContent);
     // updateBlock doesn't refresh the in-memory instance; keep both fields
     // in sync so subsequent blockContent(newBlock) reads see the update on
@@ -298,7 +312,7 @@ async function recursiveCopyBlocks(
 
   const children = (srcBlock.children ?? []) as Array<BlockEntity>;
   if (children.length > 0) {
-    console.log(['inserting child block', srcContent, blockContent(newBlock), srcBlock, newBlock]);
+    log(['inserting child block', srcContent, blockContent(newBlock), srcBlock, newBlock]);
     const firstChild = await logseq.Editor.insertBlock(newBlock.uuid, '');
     if (!firstChild) throw new Error('insertBlock returned null for empty child placeholder');
     let newChildBlock: BlockEntity = firstChild;
@@ -311,7 +325,7 @@ async function recursiveCopyBlocks(
     }
     if (newChildBlock.uuid === firstChildBlockUUID && blockContent(newChildBlock) === '') {
       // Actually all children were DONE, we didn't copy to the empty block.
-      console.log(['removing unused child block', blockContent(newChildBlock), newChildBlock]);
+      log(['removing unused child block', blockContent(newChildBlock), newChildBlock]);
       await logseq.Editor.removeBlock(newChildBlock.uuid);
     }
   }
@@ -319,7 +333,7 @@ async function recursiveCopyBlocks(
   if (!hasAnyDoneDescendant && (!(isUnderlineRegex.test(srcContent) && groupHasAnyDoneTask))) {
     // we can safely delete the block if it was copied whole
     // we keep underline blocks for groups with done tasks as they are titles
-    console.log(['Removing block from source', srcContent, srcBlock]);
+    log(['Removing block from source', srcContent, srcBlock]);
     await logseq.Editor.removeBlock(srcBlock.uuid);
     isBlockRemoved = true;
   }
@@ -376,4 +390,4 @@ async function main() {
 
 }
 
-logseq.ready(main).catch(console.error);
+logseq.ready(main).catch(error);

@@ -158,6 +158,24 @@ class HarnessSession {
     this.results = [];
   }
 
+  // Set Logseq's preferred-workflow on the graph. The plugin re-reads
+  // logseq.App.getUserConfigs() on every shortcut press, so changes
+  // here take effect on the next mod+1 — no plugin reload needed.
+  // We rewrite config.edn and let Logseq's fs-watcher reload it.
+  async setPreferredWorkflow(workflow) {
+    const configPath = path.join(this.graphDir, 'logseq', 'config.edn');
+    const current = fs.readFileSync(configPath, 'utf8');
+    const next = current.replace(/:preferred-workflow\s+:\w+/, `:preferred-workflow :${workflow}`);
+    if (next === current) {
+      // Nothing changed — config already matches.
+      return;
+    }
+    fs.writeFileSync(configPath, next);
+    // Logseq picks up config.edn changes via the fs-watcher; getUserConfigs()
+    // reflects the new value within ~1s.
+    await this.page.waitForTimeout(1500);
+  }
+
   // Reset all journal state. After this returns, the graph has no
   // journal pages in datascript and no .md files on disk in journals/.
   // Critical: poll until Logseq stops re-creating today's file —
@@ -307,12 +325,32 @@ class HarnessSession {
   }
 
   // Press a keyboard shortcut. Use Meta on macOS for `mod`.
-  // After firing, press Escape to exit edit mode so the next click
-  // can re-focus a block via .block-content (which isn't rendered
-  // while the editor is open over it).
-  async pressShortcut(combo) {
+  //
+  // After firing, poll the on-disk file for content changes. The plugin
+  // writes via Logseq's `Editor.updateBlock`, which round-trips through
+  // the iframe + Logseq main + fs writer. On a slow runner that can
+  // exceed a fixed 400ms wait, producing false "keystroke didn't fire"
+  // failures. We poll instead, with a fallback timeout.
+  //
+  // After we detect the change (or time out), press Escape to exit edit
+  // mode so the next .block-content click can find the block again.
+  async pressShortcut(combo, { watchFile, timeoutMs = 4000 } = {}) {
+    const before = watchFile && fs.existsSync(watchFile)
+      ? fs.readFileSync(watchFile, 'utf8') : null;
     await this.page.keyboard.press(combo);
-    await this.page.waitForTimeout(400); // wait for Logseq to flush edit to disk
+    if (watchFile) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        if (fs.existsSync(watchFile)) {
+          const now = fs.readFileSync(watchFile, 'utf8');
+          if (now !== before) break;
+        }
+        await this.page.waitForTimeout(100);
+      }
+    } else {
+      // No file to watch — fall back to the fixed-wait behavior
+      await this.page.waitForTimeout(500);
+    }
     await this.page.keyboard.press('Escape');
     await this.page.waitForTimeout(200);
   }
@@ -379,7 +417,14 @@ class HarnessSession {
   }
 
   // Run a single shortcut test case. The case object:
-  //   { name, journals, focusText, actions: [{ press: 'Meta+1' }, ...], expect: (journals) => string|null }
+  //   {
+  //     name,
+  //     journals,
+  //     focusText,
+  //     actions: [{ press: 'Meta+1' }, ...],
+  //     preferredWorkflow?: 'todo' | 'now',  // default 'todo'
+  //     expect: (journals) => string|null,
+  //   }
   // Shortcut cases use yesterday's journal as the test page because
   // Logseq's create-today-journal! races our seed for today.
   async runShortcutCase(c) {
@@ -388,6 +433,9 @@ class HarnessSession {
     // Defensive: if a previous case left the editor open, close it first
     await this.page.keyboard.press('Escape').catch(() => {});
     await this.page.waitForTimeout(200);
+    // Pin the workflow before each case so a prior case's setting can't
+    // leak in. Defaults to 'todo' (Logseq's default).
+    await this.setPreferredWorkflow(c.preferredWorkflow || 'todo');
     await this.resetGraph();
     // Always seed content under 'yesterday' regardless of what the case
     // declares — gives us a stable page Logseq won't auto-rewrite.
@@ -415,7 +463,10 @@ class HarnessSession {
       }
       for (const action of c.actions) {
         if (action.press) {
-          await this.pressShortcut(action.press);
+          // Watch yesterday's file: shortcut tests assert on its content.
+          // pressShortcut polls for the file to change after the press,
+          // so a slow CI runner doesn't miss the disk flush.
+          await this.pressShortcut(action.press, { watchFile: this.ydayPath });
         }
         if (action.focusText) {
           await this.focusBlockByText(action.focusText);
