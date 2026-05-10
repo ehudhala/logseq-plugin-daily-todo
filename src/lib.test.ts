@@ -94,6 +94,17 @@ describe('blockContent', () => {
     expect(blockContent({})).toBe('');
     expect(blockContent({ content: '' })).toBe('');
   });
+
+  it('falls back to .content when .title is the legacy 0.0.9 Array shape', () => {
+    // BlockEntity in @logseq/libs 0.0.9 declared title?: Array<any>
+    // (parsed AST). Modern versions canonicalize title to a string.
+    // The helper treats non-string title as "not present" so the legacy
+    // .content path still works.
+    expect(blockContent({ title: ['parsed', 'ast'] as any, content: 'real content' }))
+      .toBe('real content');
+    expect(blockContent({ title: [] as any, content: 'real content' }))
+      .toBe('real content');
+  });
 });
 
 describe('isHighlighted', () => {

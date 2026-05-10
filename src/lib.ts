@@ -20,23 +20,31 @@ export const getNextTodoState = (todoState: string): string => {
   } as Record<string, string>)[todoState] ?? '';
 };
 
-// A minimal block shape that matches both legacy (`content`) and
-// modern (`title`) @logseq/libs BlockEntity. The helpers here only
-// touch the fields they need, so the lib stays free of SDK-version
-// concerns and main.ts can pass full BlockEntity instances through.
+// A minimal block shape that matches both legacy and modern
+// @logseq/libs BlockEntity. Loose typing on `title` and `children` is
+// intentional: in 0.0.9 `title` is `Array<any>` (legacy AST) and in
+// >= 0.0.17 it's `string`; `children` in BlockEntity is
+// `Array<BlockEntity | BlockUUIDTuple>`, so a strict `MinimalBlock[]`
+// would refuse to accept it. The helpers here only touch the fields
+// they need and gracefully tolerate extras, so main.ts can pass full
+// BlockEntity instances through without casts.
 export interface MinimalBlock {
   content?: string;
-  title?: string;
-  children?: MinimalBlock[];
+  title?: unknown;
+  children?: ReadonlyArray<MinimalBlock | unknown>;
 }
 
 // Read a block's text content. In @logseq/libs >= 0.0.17 `block.content`
-// is @deprecated and `block.title` is canonical; both fields can be present
-// at runtime depending on Logseq version. Use this everywhere instead of
-// reading .content directly so the plugin works across SDK versions.
+// is @deprecated and `block.title` is canonical (as a string); in 0.0.9
+// `block.title` was `Array<any>` (legacy AST) and `block.content` held
+// the text. Use this everywhere instead of reading `.content` directly
+// so the plugin works across SDK versions.
 export const blockContent = (block: MinimalBlock | undefined | null): string => {
   if (!block) return '';
-  return block.title ?? block.content ?? '';
+  // Only treat .title as the source of truth when it's actually a string.
+  // The legacy 0.0.9 Array<any> shape falls through to .content.
+  if (typeof block.title === 'string') return block.title;
+  return block.content ?? '';
 };
 
 export const isHighlighted = (block: MinimalBlock): boolean => {
@@ -48,15 +56,18 @@ export const extractTodoState = (block: MinimalBlock): string => {
   return match !== null && match.length > 0 ? match[1] : '';
 };
 
-// Recursively check if any block in the subtree matches a regex.
+// Recursively check if any block in the subtree matches a regex. Children
+// elements that aren't block-shaped (e.g. SDK BlockUUIDTuple — `[uuid, ...]`)
+// are skipped — they don't carry content this helper can inspect.
 export function recursivelyCheckForRegexInBlock(
   block: MinimalBlock,
   regex: RegExp,
 ): boolean {
   if (regex.test(blockContent(block))) return true;
-  return (block.children ?? []).some(child =>
-    recursivelyCheckForRegexInBlock(child, regex),
-  );
+  return (block.children ?? []).some(child => {
+    if (typeof child !== 'object' || child === null || Array.isArray(child)) return false;
+    return recursivelyCheckForRegexInBlock(child as MinimalBlock, regex);
+  });
 }
 
 // Split a flat list of blocks into groups separated by empty blocks.
