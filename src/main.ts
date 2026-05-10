@@ -189,7 +189,11 @@ async function updateNewJournalWithAllTODOs({blocks, txData}: OnChangedPayload) 
   // journal? and journalDay live on PageEntity in modern @logseq/libs (they
   // were on BlockEntity in 0.0.x). Bracket access keeps this working across
   // versions without depending on the static type.
-  type JournalPageBlock = BlockEntity & { 'journal?'?: boolean; journalDay?: number };
+  type JournalPageBlock = BlockEntity & {
+    name: string;
+    'journal?'?: boolean;
+    journalDay?: number;
+  };
   const newJournalBlock = blocks.find(
     (block: BlockEntity): block is JournalPageBlock =>
       block.hasOwnProperty('createdAt') && (block as JournalPageBlock)['journal?'] === true
