@@ -8,6 +8,10 @@
     "title": "Daily TODO",
     "icon": "./icon.png"
   },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "build": "vite build && cp README.md LICENSE icon.png package.json dist/",
     "test": "vitest run",
@@ -19,7 +23,7 @@
     "test:e2e:shortcuts": "bash e2e/run.sh --shortcuts"
   },
   "devDependencies": {
-    "@types/node": "^18.7.16",
+    "@types/node": "^22.10.0",
     "@typescript-eslint/eslint-plugin": "^5.36.2",
     "@typescript-eslint/parser": "^5.36.2",
     "eslint": "^8.23.0",
