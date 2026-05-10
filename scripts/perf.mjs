@@ -48,7 +48,7 @@ function staticServer(rootDir, port) {
       res.end(data);
     });
   });
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     server.listen(port, '127.0.0.1', () => resolve(server));
   });
 }

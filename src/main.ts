@@ -1,6 +1,6 @@
 import '@logseq/libs';
 
-import {BlockEntity, IDatom} from '@logseq/libs/dist/LSPlugin';
+import { BlockEntity, IDatom } from '@logseq/libs/dist/LSPlugin';
 
 // Result shape of queryCurrentRepoRangeJournals — a journal-page entity
 // pulled out of datascript. Bracket-keyed because Logseq's pull syntax
@@ -84,7 +84,7 @@ const getSettings = (
   key: string | undefined,
   defaultValue: any = undefined
 ) => {
-  let settings = logseq.settings;
+  const settings = logseq.settings;
   const merged = Object.assign(defaultSettings, settings);
   return key ? (merged[key] ? merged[key] : defaultValue) : merged;
 };
@@ -94,7 +94,7 @@ async function toggleHighlight() {
   const selected = await logseq.Editor.getSelectedBlocks();
   const blocks = (selected && selected.length > 1) ? selected : [await logseq.Editor.getCurrentBlock()];
   const blocksInDifferentStates = (blocks.length > 0 && blocks.some(block => isHighlighted(block) != isHighlighted(blocks[0])));
-  for (let block of blocks) {
+  for (const block of blocks) {
     if (block?.uuid) {
       if (isHighlighted(block)) {
         const match = highlightRegex.exec(blockContent(block));
@@ -118,11 +118,11 @@ async function toggleTODO() {
   const selected = await logseq.Editor.getSelectedBlocks();
   const blocks = (selected && selected.length > 1) ? selected : [await logseq.Editor.getCurrentBlock()];
   const blocksInDifferentStates = (blocks.length > 0 && blocks.some(block => extractTodoState(block) != extractTodoState(blocks[0])));
-  for (let block of blocks) {
+  for (const block of blocks) {
     if (block?.uuid) {
-      let todoState = blocksInDifferentStates ? 'DONE' : extractTodoState(block); // If blocks are in different states we "clear" them.
+      const todoState = blocksInDifferentStates ? 'DONE' : extractTodoState(block); // If blocks are in different states we "clear" them.
       const content = blockContent(block);
-      let strippedContent = todoDoneRegex.test(content)
+      const strippedContent = todoDoneRegex.test(content)
         ? content.replace(todoDoneRegex, '')
         : content;
       await logseq.Editor.updateBlock(
@@ -163,20 +163,20 @@ type OnChangedPayload = {
   txMeta?: { outlinerOp: string; [key: string]: unknown };
 };
 
-async function updateNewJournalWithAllTODOs({blocks, txData}: OnChangedPayload) {
+async function updateNewJournalWithAllTODOs({ blocks, txData }: OnChangedPayload) {
   // This hook is actually called on every block update so checking if the block update is a journal creation transatcion should be fast.
   let updatedAt = null;
   let createdAt = null;
   let isJournal = false;
-  for (let datum of txData) {
+  for (const datum of txData) {
     // datum structure https://tonsky.me/blog/datascript-internals/
-    if ((datum[1] === 'updatedAt' || datum[1] === "block/updated-at") && datum[4] === true) {
+    if ((datum[1] === 'updatedAt' || datum[1] === 'block/updated-at') && datum[4] === true) {
       updatedAt = datum[2];
     }
-    if ((datum[1] === 'createdAt' || datum[1] === "block/created-at") && datum[4] === true) {
+    if ((datum[1] === 'createdAt' || datum[1] === 'block/created-at') && datum[4] === true) {
       createdAt = datum[2];
     }
-    if ((datum[1] === 'journal?' || datum[1] === "block/journal?") && datum[4] === true) {
+    if ((datum[1] === 'journal?' || datum[1] === 'block/journal?') && datum[4] === true) {
       isJournal = datum[2];
     }
   }
@@ -196,25 +196,26 @@ async function updateNewJournalWithAllTODOs({blocks, txData}: OnChangedPayload) 
   };
   const newJournalBlock = blocks.find(
     (block: BlockEntity): block is JournalPageBlock =>
-      block.hasOwnProperty('createdAt') && (block as JournalPageBlock)['journal?'] === true
+      Object.prototype.hasOwnProperty.call(block, 'createdAt') &&
+      (block as JournalPageBlock)['journal?'] === true
   );
-  console.log({newJournalBlock});
+  console.log({ newJournalBlock });
   if (!newJournalBlock || newJournalBlock.journalDay === undefined) return;
 
   const prevJournals = await queryCurrentRepoRangeJournals(newJournalBlock.journalDay);
-  console.log({prevJournals});
+  console.log({ prevJournals });
   if (!prevJournals || prevJournals.length === 0) {
     return;
   }
   const latestJournal = prevJournals.reduce( // TODO: This aggregation should be handled by the query itself.
     (prev: JournalPage, current: JournalPage) => prev['journal-day'] > current['journal-day'] ? prev : current
   );
-  console.log({latestJournal});
+  console.log({ latestJournal });
   const latestJournalBlocks = await logseq.Editor.getPageBlocksTree(latestJournal.name);
-  console.log({latestJournalBlocks});
+  console.log({ latestJournalBlocks });
 
   const latestJournalBlockGroups = splitBlocksIntoGroups(latestJournalBlocks);
-  console.log({latestJournalBlockGroups});
+  console.log({ latestJournalBlockGroups });
 
   let newJournalLastBlock = await getLastBlock(newJournalBlock.name);
   if (!newJournalLastBlock) {
@@ -222,10 +223,10 @@ async function updateNewJournalWithAllTODOs({blocks, txData}: OnChangedPayload) 
     console.log('newJournalLastBlock is null, skipping migration');
     return;
   }
-  for (let group of latestJournalBlockGroups) {
+  for (const group of latestJournalBlockGroups) {
     if (group.some((block: BlockEntity) => recursivelyCheckForRegexInBlock(block, todoRegex))) {
       const hasAnyDoneTasks = group.some((block: BlockEntity) => recursivelyCheckForRegexInBlock(block, doneRegex));
-      for (let block of group) {
+      for (const block of group) {
         const [nextLast, isBlockRemoved] = await recursiveCopyBlocks(block, newJournalLastBlock, hasAnyDoneTasks);
         newJournalLastBlock = nextLast;
         if (isBlockRemoved) {
@@ -238,7 +239,7 @@ async function updateNewJournalWithAllTODOs({blocks, txData}: OnChangedPayload) 
           }
         }
       }
-      console.log(["inserting block between groups", blockContent(newJournalLastBlock), newJournalLastBlock, newJournalBlock]);
+      console.log(['inserting block between groups', blockContent(newJournalLastBlock), newJournalLastBlock, newJournalBlock]);
       // we add a block twice because the copy updates the last empty block
       await logseq.Editor.appendBlockInPage(newJournalBlock.uuid, ''); // actual separator
       await logseq.Editor.appendBlockInPage(newJournalBlock.uuid, ''); // new block of next group
@@ -279,14 +280,14 @@ async function recursiveCopyBlocks(
   let newBlock: BlockEntity = lastDestBlock;
   const lastDestContent = blockContent(lastDestBlock);
   if (lastDestContent !== '') {
-    console.log(["inserting block", srcContent, lastDestContent, srcBlock, lastDestBlock]);
+    console.log(['inserting block', srcContent, lastDestContent, srcBlock, lastDestBlock]);
     const inserted = await logseq.Editor.insertBlock(lastDestBlock.uuid, srcContent, {
       sibling: true,
     });
     if (!inserted) throw new Error(`insertBlock returned null for ${srcContent}`);
     newBlock = inserted;
   } else {
-    console.log(["updating block content", srcContent, lastDestContent, srcBlock, lastDestBlock]);
+    console.log(['updating block content', srcContent, lastDestContent, srcBlock, lastDestBlock]);
     await logseq.Editor.updateBlock(lastDestBlock.uuid, srcContent);
     // updateBlock doesn't refresh the in-memory instance; keep both fields
     // in sync so subsequent blockContent(newBlock) reads see the update on
@@ -297,7 +298,7 @@ async function recursiveCopyBlocks(
 
   const children = (srcBlock.children ?? []) as Array<BlockEntity>;
   if (children.length > 0) {
-    console.log(["inserting child block", srcContent, blockContent(newBlock), srcBlock, newBlock]);
+    console.log(['inserting child block', srcContent, blockContent(newBlock), srcBlock, newBlock]);
     const firstChild = await logseq.Editor.insertBlock(newBlock.uuid, '');
     if (!firstChild) throw new Error('insertBlock returned null for empty child placeholder');
     let newChildBlock: BlockEntity = firstChild;
@@ -310,7 +311,7 @@ async function recursiveCopyBlocks(
     }
     if (newChildBlock.uuid === firstChildBlockUUID && blockContent(newChildBlock) === '') {
       // Actually all children were DONE, we didn't copy to the empty block.
-      console.log(["removing unused child block", blockContent(newChildBlock), newChildBlock]);
+      console.log(['removing unused child block', blockContent(newChildBlock), newChildBlock]);
       await logseq.Editor.removeBlock(newChildBlock.uuid);
     }
   }
@@ -318,7 +319,7 @@ async function recursiveCopyBlocks(
   if (!hasAnyDoneDescendant && (!(isUnderlineRegex.test(srcContent) && groupHasAnyDoneTask))) {
     // we can safely delete the block if it was copied whole
     // we keep underline blocks for groups with done tasks as they are titles
-    console.log(["Removing block from source", srcContent, srcBlock]);
+    console.log(['Removing block from source', srcContent, srcBlock]);
     await logseq.Editor.removeBlock(srcBlock.uuid);
     isBlockRemoved = true;
   }
@@ -369,7 +370,7 @@ async function main() {
       await toggleHighlight();
     }
   );
-  logseq.DB.onChanged(async (params) => {
+  logseq.DB.onChanged(async params => {
     await updateNewJournalWithAllTODOs(params);
   });
 

@@ -49,7 +49,7 @@ export const sanityCase = {
   todayWaitMatch: c =>
     /TODO Buy groceries/.test(c)
     && /TODO Standalone task/.test(c),
-  expect: (j) => allOf(
+  expect: j => allOf(
     // === Mixed TODO/DONE group ===
     contains(j[TODAY_FILE], /TODO Buy groceries/, 'today: first TODO'),
     contains(j[TODAY_FILE], /TODO Call mom/, 'today: second TODO'),
