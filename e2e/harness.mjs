@@ -325,12 +325,32 @@ class HarnessSession {
   }
 
   // Press a keyboard shortcut. Use Meta on macOS for `mod`.
-  // After firing, press Escape to exit edit mode so the next click
-  // can re-focus a block via .block-content (which isn't rendered
-  // while the editor is open over it).
-  async pressShortcut(combo) {
+  //
+  // After firing, poll the on-disk file for content changes. The plugin
+  // writes via Logseq's `Editor.updateBlock`, which round-trips through
+  // the iframe + Logseq main + fs writer. On a slow runner that can
+  // exceed a fixed 400ms wait, producing false "keystroke didn't fire"
+  // failures. We poll instead, with a fallback timeout.
+  //
+  // After we detect the change (or time out), press Escape to exit edit
+  // mode so the next .block-content click can find the block again.
+  async pressShortcut(combo, { watchFile, timeoutMs = 4000 } = {}) {
+    const before = watchFile && fs.existsSync(watchFile)
+      ? fs.readFileSync(watchFile, 'utf8') : null;
     await this.page.keyboard.press(combo);
-    await this.page.waitForTimeout(400); // wait for Logseq to flush edit to disk
+    if (watchFile) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        if (fs.existsSync(watchFile)) {
+          const now = fs.readFileSync(watchFile, 'utf8');
+          if (now !== before) break;
+        }
+        await this.page.waitForTimeout(100);
+      }
+    } else {
+      // No file to watch — fall back to the fixed-wait behavior
+      await this.page.waitForTimeout(500);
+    }
     await this.page.keyboard.press('Escape');
     await this.page.waitForTimeout(200);
   }
@@ -443,7 +463,10 @@ class HarnessSession {
       }
       for (const action of c.actions) {
         if (action.press) {
-          await this.pressShortcut(action.press);
+          // Watch yesterday's file: shortcut tests assert on its content.
+          // pressShortcut polls for the file to change after the press,
+          // so a slow CI runner doesn't miss the disk flush.
+          await this.pressShortcut(action.press, { watchFile: this.ydayPath });
         }
         if (action.focusText) {
           await this.focusBlockByText(action.focusText);
