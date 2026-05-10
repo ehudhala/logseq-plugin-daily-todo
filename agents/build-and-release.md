@@ -60,18 +60,30 @@ them within an hour or so.
 
 ### Cutting a release
 
-1. Make sure master is in the state you want to release.
+1. Make sure master is in the state you want to release. Confirm CI
+   on master is green (`gh run list --branch master --limit 1`) — the
+   release workflow runs no tests of its own.
 2. `git tag <version>` (no `v` prefix — match the existing pattern,
    e.g. `0.0.9`).
 3. `git push origin <version>`.
 4. Watch the Action on GitHub. On success: the release page has the
    zip and tar.gz, and master gains a `chore: bump version to X.Y.Z`
    commit from `github-actions[bot]`.
+5. Pull the bump-back commit locally: `git pull --ff-only`. Otherwise
+   the next branch you cut from master will diverge by one.
 
 That's it. **You do not bump `package.json` manually.** The workflow
 makes the tag and `package.json` agree by construction, so the
 0.0.7-style drift (tag was 0.0.7, `package.json` said 0.0.6 for over
 a year) cannot recur.
+
+### Asset filenames in releases
+
+Releases publish `logseq-plugin-daily-todo.zip` and
+`logseq-plugin-daily-todo.tar.gz` (no version suffix in the filename).
+The Marketplace registry locates them by tag, not by filename. Older
+releases (≤ 0.0.8) had the version embedded in the filename; that's
+historical and doesn't break anything.
 
 ### Don't
 

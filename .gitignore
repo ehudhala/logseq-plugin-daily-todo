@@ -3,3 +3,7 @@ dist/
 
 .vscode/
 .DS_Store
+
+# Local-machine agent memory (per-developer notes that don't belong
+# in the repo — multi-account setup, machine-specific paths, etc.)
+CLAUDE.local.md

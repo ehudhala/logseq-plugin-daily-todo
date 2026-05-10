@@ -12,14 +12,16 @@ and the constraints that should guide future changes.
 
 - [`overview.md`](./overview.md) — what this plugin does and how its
   pieces fit together.
-- [`testing.md`](./testing.md) — the headless E2E suite, dev loop
-  (`pnpm test:e2e:quick`), full suite (`pnpm test:e2e`), and how to
-  author new cases.
+- [`workflow.md`](./workflow.md) — branch naming, PR style, the inner
+  loop, CI shape, and other working-in-this-repo conventions.
+- [`testing.md`](./testing.md) — the unit + E2E test surface, what
+  each gate catches, and how to author new cases.
 - [`logseq-plugin-loading.md`](./logseq-plugin-loading.md) — how
   Logseq loads plugins, what the &quot;takes too long to load&quot; warning
   measures, and what *doesn't* count toward it.
 - [`build-and-release.md`](./build-and-release.md) — Vite config
-  rationale, the publish workflow, and version-bump checklist.
+  rationale, the tag-as-truth publish workflow, and the release
+  checklist.
 - [`perf-testing.md`](./perf-testing.md) — how to use the local perf
   harness and how to measure inside actual Logseq.
 - [`gotchas.md`](./gotchas.md) — non-obvious behaviors that surprised
@@ -30,7 +32,10 @@ and the constraints that should guide future changes.
 
 [`research/`](./research/) holds dated investigation logs, one file
 per topic. See [`research/README.md`](./research/README.md) for the
-convention. The active research doc is
-[`2026-05-09-modernization-ai-first-and-e2e.md`](./research/2026-05-09-modernization-ai-first-and-e2e.md);
-it covers what's shipped, what's queued, and the technical layer of
-the headless E2E PoC.
+convention. Two active research docs:
+
+- [`2026-05-09-modernization-ai-first-and-e2e.md`](./research/2026-05-09-modernization-ai-first-and-e2e.md)
+  — the technical layer of the headless E2E PoC, the modernization
+  plan, and AI-first repo conventions.
+- [`2026-05-10-logseq-sync-implications.md`](./research/2026-05-10-logseq-sync-implications.md)
+  — how Logseq Sync interacts with this plugin's `DB.onChanged` listener.
