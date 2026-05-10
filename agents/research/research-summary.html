@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>logseq-plugin-daily-todo — research summary</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --fg: #1a1a1a;
+    --muted: #5a5a5a;
+    --bg: #fafafa;
+    --card: #ffffff;
+    --accent: #0066cc;
+    --accent-soft: #eef5ff;
+    --warn: #b45309;
+    --warn-soft: #fff7ed;
+    --bad: #b91c1c;
+    --bad-soft: #fef2f2;
+    --good: #166534;
+    --good-soft: #f0fdf4;
+    --border: #e5e5e5;
+    --code-bg: #f4f4f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e5e5e5;
+      --muted: #a8a8a8;
+      --bg: #18181b;
+      --card: #232328;
+      --accent: #60a5fa;
+      --accent-soft: #1e293b;
+      --warn: #fbbf24;
+      --warn-soft: #2a2310;
+      --bad: #f87171;
+      --bad-soft: #2c1818;
+      --good: #4ade80;
+      --good-soft: #102a18;
+      --border: #2f2f35;
+      --code-bg: #27272a;
+    }
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    max-width: 1200px;
+    margin: 0 auto;
+    gap: 32px;
+    padding: 32px 24px 64px;
+  }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; max-height: none; }
+  }
+  nav.toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    font-size: 14px;
+  }
+  nav.toc h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; letter-spacing: 0.04em; }
+  nav.toc ol { list-style: none; padding: 0; margin: 0; }
+  nav.toc li { margin: 4px 0; }
+  nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 4px 8px; border-left: 2px solid transparent; }
+  nav.toc a:hover { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
+  nav.toc ol ol { padding-left: 14px; font-size: 13px; }
+
+  main { max-width: 800px; }
+  h1 { font-size: 28px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 22px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); scroll-margin-top: 16px; }
+  h3 { font-size: 17px; margin: 24px 0 8px; scroll-margin-top: 16px; }
+  h4 { font-size: 15px; margin: 16px 0 4px; color: var(--muted); }
+  p { margin: 8px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  pre code { background: none; padding: 0; }
+  a { color: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  .meta { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .lede { font-size: 17px; color: var(--muted); margin-bottom: 28px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+  }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin: 16px 0;
+  }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout.bad { border-left-color: var(--bad); background: var(--bad-soft); }
+  .callout.good { border-left-color: var(--good); background: var(--good-soft); }
+  .callout strong:first-child { color: var(--accent); }
+  .callout.warn strong:first-child { color: var(--warn); }
+  .callout.bad strong:first-child { color: var(--bad); }
+  .callout.good strong:first-child { color: var(--good); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
+  tr:hover td { background: var(--accent-soft); }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .pill.shipped { background: var(--good-soft); color: var(--good); }
+  .pill.pending { background: var(--warn-soft); color: var(--warn); }
+  .pill.research { background: var(--accent-soft); color: var(--accent); }
+
+  .footnote { font-size: 13px; color: var(--muted); margin-top: 24px; }
+  .footnote em { font-style: italic; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" aria-label="Table of contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#load-time">1. Load-time fix (0.0.8)</a>
+      <ol>
+        <li><a href="#load-time-warning">The 6-second warning</a></li>
+        <li><a href="#load-time-counts">What does &amp; doesn't count</a></li>
+        <li><a href="#load-time-fix">The fix</a></li>
+      </ol>
+    </li>
+    <li><a href="#triggers">2. Trigger semantics</a>
+      <ol>
+        <li><a href="#triggers-correct">The filter is correct</a></li>
+        <li><a href="#triggers-paths">Paths that fire it</a></li>
+        <li><a href="#triggers-paths-not">Paths that don't</a></li>
+      </ol>
+    </li>
+    <li><a href="#sdk">3. SDK breakages</a></li>
+    <li><a href="#sync">4. Logseq Sync</a>
+      <ol>
+        <li><a href="#sync-transmits">What sync transmits</a></li>
+        <li><a href="#sync-coordination">No coordination</a></li>
+        <li><a href="#sync-mobile">Mobile</a></li>
+        <li><a href="#sync-overnight">Overnight migration mechanism</a></li>
+        <li><a href="#sync-duplication">Multi-device duplication</a></li>
+      </ol>
+    </li>
+    <li><a href="#testing">5. Testing strategy</a>
+      <ol>
+        <li><a href="#testing-layers">Three layers</a></li>
+        <li><a href="#testing-e2e">Headless E2E</a></li>
+        <li><a href="#testing-flow-a">Flow A trigger</a></li>
+        <li><a href="#testing-shortcuts">Shortcut testing</a></li>
+        <li><a href="#testing-isolation">Isolation</a></li>
+      </ol>
+    </li>
+    <li><a href="#ai-first">6. AI-first conventions</a></li>
+    <li><a href="#open">7. Open questions</a></li>
+    <li><a href="#sources">8. Source references</a></li>
+  </ol>
+</nav>
+
+<main>
+  <h1>logseq-plugin-daily-todo — research summary</h1>
+  <p class="meta">Compiled 2026-05-10 · Living doc, regenerate when conclusions change</p>
+  <p class="lede">
+    Everything we've established about how this plugin interacts with Logseq:
+    the load-time mechanism behind the 6-second warning, the trigger
+    semantics that govern when migration fires, the SDK breakages waiting
+    for an SDK upgrade, the sync architecture and its multi-device
+    implications, and the layered testing strategy. Cross-references the
+    underlying research documents.
+  </p>
+
+  <section id="overview">
+    <h2>Overview</h2>
+    <p>
+      <strong>logseq-plugin-daily-todo</strong> is a ~300-line TypeScript
+      plugin with two responsibilities: migrate unfinished <code>TODO</code>
+      blocks from yesterday's journal into today's when Logseq creates today,
+      and provide two keyboard shortcuts (<code>mod+1</code> cycle TODO/DONE,
+      <code>mod+4</code> highlight). No UI, no network, no React. All logic
+      lives in <code>src/main.ts</code>.
+    </p>
+    <p>
+      What follows is the durable knowledge gathered while modernizing the
+      repo and adding test coverage — describes how the world is and why,
+      not who did what when.
+    </p>
+  </section>
+
+  <hr>
+
+  <section id="load-time">
+    <h2>1. Load-time fix (0.0.8)</h2>
+
+    <h3 id="load-time-warning">The 6-second warning</h3>
+    <p>
+      Logseq emits "this plugin takes too long to load" when a plugin's
+      iframe-load + Postmate handshake exceeds 6000 ms. Plugins are loaded
+      <strong>serially</strong> — a slow plugin blocks every plugin queued
+      behind it.
+    </p>
+    <ul>
+      <li>Threshold check: <code>src/main/frontend/handler/plugin.cljs:1276</code></li>
+      <li>Interval: <code>libs/src/LSPlugin.core.ts:1504-1509</code> wraps
+        <code>pluginLocal.load(...)</code>. Stops timer when Postmate's
+        <code>handshake-reply</code> reaches the parent.</li>
+    </ul>
+
+    <h3 id="load-time-counts">What does &amp; doesn't count</h3>
+    <div class="callout">
+      <strong>Counts toward the 6 s metric:</strong>
+      iframe HTML fetch · each chained ES module import (every
+      <code>lsp://</code> fetch is an Electron IPC roundtrip) · bundle
+      parse + execute · the Postmate handshake roundtrip itself.
+    </div>
+    <div class="callout good">
+      <strong>Doesn't count:</strong>
+      anything inside <code>logseq.ready(callback)</code>, including
+      <code>App.registerCommandPalette</code>, <code>DB.onChanged</code>,
+      <code>datascriptQuery</code>, <code>updateSettings</code>. By the
+      time Logseq stops the timer, those haven't run yet.
+    </div>
+    <p>
+      <strong>If you see the warning, don't optimize <code>main()</code>.</strong>
+      Look at the bundle.
+    </p>
+
+    <h3 id="load-time-fix">The fix shipped in 0.0.8</h3>
+    <p>
+      The old build used
+      <code>manualChunks: { logseq: ['@logseq/libs'] }</code>, producing an
+      entry chunk that did <code>import './logseq.xxx.js'</code> — two
+      chained <code>lsp://</code> fetches before <code>ready()</code> could
+      fire. The new config sets
+      <code>output.inlineDynamicImports: true</code>, producing a single
+      ~78 KB chunk: same gzip, same code, half the per-startup IPC
+      roundtrips.
+    </p>
+    <div class="callout bad">
+      <strong>Do not switch back to <code>manualChunks</code>.</strong> It
+      looks like a vendor-cache optimization, but plugin assets aren't
+      shared across plugins; every chunk is its own <code>lsp://</code>
+      IPC roundtrip on every plugin load on every Logseq startup.
+    </div>
+    <p>
+      The single-chunk invariant is enforced in <code>pnpm perf</code>: it
+      drives <code>perf-test/host.html</code> headlessly and asserts
+      <code>resourceCount === 1</code> + a median load threshold.
+    </p>
+  </section>
+
+  <hr>
+
+  <section id="triggers">
+    <h2>2. Trigger semantics — when does migration fire</h2>
+
+    <h3 id="triggers-correct">The filter is correct</h3>
+    <p>
+      The plugin's <code>DB.onChanged</code> filter requires
+      <code>createdAt === updatedAt &amp;&amp; journal? === true</code> on a
+      <strong>single transaction</strong>. That shape is what Logseq's in-app
+      <code>create-today-journal!</code> emits.
+    </p>
+    <div class="callout good">
+      <strong>Don't relax this filter.</strong> Loosening it would re-fire
+      migration on every Logseq startup as it parses existing journals,
+      duplicating content and corrupting source journals.
+    </div>
+
+    <h3 id="triggers-paths">Paths that DO trigger migration</h3>
+    <ul>
+      <li>The day-rollover timer (a 3 s <code>setInterval</code> in
+        <code>frontend.handler/watch-for-date!</code>) firing
+        <code>create-today-journal!</code> at midnight while the app is
+        running</li>
+      <li>The today-link click in the sidebar on a new day</li>
+      <li>The fs-watcher reacting to today's file being deleted (Logseq
+        re-runs <code>create-today-journal!</code>)</li>
+      <li>Cold start on a new day — Logseq creates today empty before the
+        listener runs</li>
+    </ul>
+    <p>
+      A consequence: <strong>today's journal is always empty at the moment
+      migration runs</strong>.
+    </p>
+
+    <h3 id="triggers-paths-not">Paths that don't</h3>
+    <ul>
+      <li>UI navigation to today when today already exists in datascript
+        (no creation transaction, no listener fire)</li>
+      <li>File-import (e.g. dropping a markdown file into the journals
+        directory, or sync arriving from another device — see <a href="#sync">§4</a>)</li>
+      <li>Any edit to an existing journal page</li>
+    </ul>
+
+    <h3>Why "today has pre-existing content" isn't a real bug</h3>
+    <p>
+      Earlier testing surfaced a "rule-11" case: if today already has
+      content, migration overwrites it. Investigation showed the scenario
+      isn't reachable through any real Logseq trigger — the
+      file-deletion path wipes today before migration runs, and other
+      paths don't fire the listener at all. The <code>recursiveCopyBlocks</code>
+      branch at <code>lastDestBlock.content !== ''</code> exists for the
+      abstract case but is dead code in practice.
+    </p>
+    <div class="callout warn">
+      <strong>Don't &quot;clean up&quot; the dead branch.</strong> If Logseq's
+      create-today behavior ever changes, it could become live again.
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="sdk">
+    <h2>3. SDK breakages waiting in src/main.ts</h2>
+    <p>
+      The plugin pins <code>@logseq/libs@0.0.9</code>. Three call sites
+      break against any modern SDK (≥ 0.0.17):
+    </p>
+
+    <h4>3.1 <code>block.left.id</code> is gone</h4>
+    <p>
+      <code>BlockEntity.left</code> was removed in favor of
+      <code>parent: IEntityID</code> + <code>order: string</code>. The
+      empty-separator cleanup uses <code>block.left.id</code>; rewrite via
+      the parent's <code>children</code> array, or drop the cosmetic
+      cleanup on DB graphs.
+    </p>
+
+    <h4>3.2 <code>block.content</code> is deprecated</h4>
+    <p>
+      Read sites should use <code>block.title ?? block.content</code>.
+      Write paths still accept content strings.
+    </p>
+
+    <h4>3.3 <code>journal?</code> / <code>journalDay</code> moved to
+      <code>PageEntity</code></h4>
+    <p>
+      Runtime values still appear in <code>DB.onChanged</code> payloads
+      for journal pages — the existing dual-key check stays correct, but
+      the static type should narrow to <code>PageEntity</code>.
+    </p>
+
+    <p>
+      <em>Status:</em> see <code>master</code>'s
+      <code>refactor: prepare src/main.ts for @logseq/libs &gt;= 0.0.17</code>
+      commit. Refactor work has begun; SDK bump itself comes after.
+    </p>
+
+    <div class="callout">
+      <strong>Don't bump <code>@logseq/libs</code> past 0.0.x without
+      fixing all three.</strong> The plugin will silently break.
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="sync">
+    <h2>4. Logseq Sync (paid beta) implications</h2>
+
+    <h3 id="sync-transmits">What sync transmits</h3>
+    <div class="callout">
+      <strong>Whole files, not datascript transactions.</strong>
+      Logseq Sync is a deltaful S3-style file sync delegating heavy
+      lifting to a Rust binary (<code>rsapi</code>). End-to-end encrypted
+      via <a href="https://github.com/FiloSottile/age">age</a>; both file
+      contents and filenames are encrypted. Pulled files arrive on the
+      receiving device via the fs-watcher path, NOT as fresh-creation
+      transactions.
+    </div>
+
+    <h3 id="sync-coordination">No primary device, no coordination</h3>
+    <p>
+      Every device runs its own <code>watch-for-date!</code> 3 s poll that
+      calls <code>create-today-journal!</code> when
+      <code>db/page-empty? repo today-page</code>. There is no midnight
+      cron, no central coordination. <code>db/page-empty?</code> is a
+      <strong>local-DB-only</strong> check.
+    </p>
+
+    <h3 id="sync-mobile">Mobile is a passive participant</h3>
+    <div class="callout warn">
+      <strong>Plugins do NOT run on Logseq mobile.</strong> The
+      Capacitor iOS/Android app gates plugin install, marketplace UI, and
+      <code>LSPluginCore</code> bootstrap behind
+      <code>(util/electron?)</code> checks. There is no Postmate host on
+      mobile.
+    </div>
+    <p>
+      This means the plugin's migration logic <strong>only runs on
+      desktop devices</strong>. Mobile sees the migration result through
+      sync — it pulls today's already-migrated journal file from the
+      server and renders it. From the user's perspective, "I opened my
+      phone in the morning and yesterday's TODOs were already in today"
+      is the result of migration that ran on a desktop earlier, not on
+      the phone.
+    </p>
+
+    <h3 id="sync-overnight">Overnight migration mechanism</h3>
+    <p>
+      A common pattern: lid is closed, the user thinks the laptop is
+      &quot;asleep and disconnected,&quot; yet today's journal contains
+      yesterday's TODOs the next morning. The mechanism:
+    </p>
+    <ol>
+      <li>macOS Power Nap (<code>powernap = 1</code>) wakes the system
+        from Deep Idle every 15-30 minutes for 9-60 second DarkWake
+        windows for routine maintenance (DHCP renewal, mail/iCloud,
+        Spotlight, Time Machine, etc.).</li>
+      <li>Logseq Electron is kept resident in RAM and was launched with
+        <code>--disable-features=MacWebContentsOcclusion</code>, which
+        skips Chromium's hidden-window throttling. During DarkWake, the
+        renderer thread runs JavaScript.</li>
+      <li>The 3 s <code>watch-for-date!</code> poll fires.
+        <code>(date/today)</code> now returns the new day.
+        <code>create-today-journal!</code> creates today's page (single
+        tx, <code>created-at == updated-at</code>, <code>journal? true</code>).</li>
+      <li>The plugin's listener matches.
+        <code>queryCurrentRepoRangeJournals</code> reads from the local
+        DataScript DB (already populated from IndexedDB cache —
+        independent of sync). Migration runs. Markdown files are
+        rewritten on disk.</li>
+      <li>Whenever WiFi briefly comes up during a later DarkWake
+        (<code>tcpkeepalive=1</code>) or on lid-open, sync uploads the
+        modified files. Mobile pulls them next time it connects.</li>
+    </ol>
+    <p>
+      The migration is purely a local file-write operation that doesn't
+      need network during DarkWake. Power Nap fires multiple times per
+      hour with high regularity, so within ~1 hour after midnight the
+      migration is essentially guaranteed to have run.
+    </p>
+    <p>
+      <strong>To verify on your machine:</strong> compare yesterday's
+      journal mtime with <code>pmset -g log | grep DarkWake</code>:
+    </p>
+    <pre><code>stat -f "%Sm %N" /path/to/your/graph/journals/*.md | tail -7
+pmset -g log | grep DarkWake | tail -50</code></pre>
+    <p>
+      Mtimes for migrated files should fall inside DarkWake windows in
+      the early hours.
+    </p>
+
+    <h3 id="sync-duplication">Multi-device duplication is a real risk</h3>
+    <p>
+      Two scenarios produce duplicate migration:
+    </p>
+    <ol>
+      <li><strong>Both desktops boot offline / before sync converges.</strong>
+        Each sees &quot;today is empty in my local DB&quot;, each runs
+        <code>create-today-journal!</code>, each fires the plugin, each
+        runs migration locally. After sync converges, default
+        last-writer-wins picks one; the loser lives in
+        <code>logseq/version-files/local/</code>. With diff-merge enabled,
+        page UUIDs differ → blocks concatenate → duplicates.</li>
+      <li><strong>Race on already-online desktops.</strong> Desktop A
+        creates today's journal at 08:00:00; sync push starts. Desktop B's
+        3 s poll fires at 08:00:03, B's DB is still empty for today, B
+        creates its own today's journal. Both run migration. Same
+        outcome.</li>
+    </ol>
+    <p>
+      The migration is destructive on the source side (removes migrated
+      TODOs from yesterday). If both devices migrate, both modify
+      yesterday too, and last-writer-wins on yesterday's file means
+      whichever lands first wins; the other device's view of yesterday
+      gets overwritten. Some DONE/title content could be lost in the
+      collision.
+    </p>
+    <div class="callout">
+      <strong>Severity:</strong> bounded probability (requires both
+      desktops active around midnight or first-open of a new day),
+      but real impact when it happens. Single-desktop users are not
+      affected.
+    </div>
+
+    <h3>Sync ingestion does NOT re-fire migration</h3>
+    <p>
+      When sync delivers today's journal file from another device, it
+      goes through the fs-watcher → parser path. The resulting
+      transaction has <code>:from-disk? true</code>, reuses existing page
+      entities when present, and does NOT produce a fresh-creation tx
+      shape. The plugin's filter doesn't match. Sync delivery doesn't
+      cause a second migration run on the receiving device.
+    </p>
+  </section>
+
+  <hr>
+
+  <section id="testing">
+    <h2>5. Testing strategy</h2>
+
+    <h3 id="testing-layers">Three layers</h3>
+    <table>
+      <thead>
+        <tr><th>Layer</th><th>What</th><th>Cost</th><th>In CI</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Unit (Vitest)</td>
+          <td>Pure helpers extracted to <code>src/lib.ts</code>: regexes,
+            <code>getNextTodoState</code>, group-split,
+            <code>decideCopyAction</code></td>
+          <td>&lt;1 s</td>
+          <td>yes</td>
+        </tr>
+        <tr>
+          <td>Mocked-SDK</td>
+          <td><em>Rejected.</em> Mock fidelity is most of the work and
+            has to track every SDK change.</td>
+          <td>—</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>End-to-end (Playwright)</td>
+          <td>Drives real Logseq.app with isolated profile; asserts on
+            on-disk markdown content.</td>
+          <td>~13 s/case, ~3 min full suite</td>
+          <td>yes (Linux runners)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      Verification surface in <code>package.json</code>:
+    </p>
+    <pre><code>pnpm test             # Vitest unit tests (&lt;1s)
+pnpm perf             # Headless perf gate (~5s)
+pnpm verify           # test + build + perf (umbrella)
+pnpm test:e2e:quick   # mega-migration sanity (~17s)
+pnpm test:e2e         # full E2E suite (~3m30s)</code></pre>
+
+    <h3 id="testing-e2e">Headless E2E — why it works</h3>
+    <p>
+      The plugin's natural test loop ("edit → build → load unpacked into
+      Logseq → restart → eyeball") needs a human at steps 3-4. The E2E
+      harness replaces that with Playwright driving real Logseq.app:
+    </p>
+    <ul>
+      <li><strong>Asserts on disk content</strong>, not API call counts.
+        Disk is what users see, what syncs, and what survives Logseq
+        restarts.</li>
+      <li><strong>Surfaced real plugin bugs</strong> on first run — the
+        empty-<code>prevJournals</code> reduce, the rule-7 DONE-child
+        drop. Both fixed in dedicated PRs.</li>
+      <li><strong>Runs in CI on Linux</strong> (<code>e2e.yml</code>),
+        with the macOS-specific isolation patch skipped because Linux
+        Electron honors <code>HOME</code>.</li>
+    </ul>
+
+    <h3 id="testing-flow-a">The Flow A trigger</h3>
+    <p>
+      Several trigger paths were considered:
+    </p>
+    <table>
+      <thead>
+        <tr><th>Path</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Click &quot;Choose a folder&quot; then navigate to
+          <code>#/page/&lt;today&gt;</code></td><td>Doesn't create the
+          journal — Logseq just shows an empty page</td></tr>
+        <tr><td>Call <code>apis.doAction(['openDir'])</code> directly</td>
+          <td>Doesn't go through the create-today-journal! path</td></tr>
+        <tr><td>Eval the renderer's closure-private
+          <code>create-today-journal!</code></td><td>Not reachable from
+          <code>window</code></td></tr>
+        <tr><td>Write today's journal file to disk after launch</td>
+          <td>Logseq parses as content-import; tx shape doesn't match
+          the plugin's filter</td></tr>
+        <tr style="background: var(--good-soft)">
+          <td><strong>Pre-seed yesterday + today, delete today after
+            launch</strong></td>
+          <td><strong>Works.</strong> Logseq's fs-watcher detects, runs
+            <code>create-today-journal!</code>, single-tx with
+            <code>createdAt === updatedAt &amp;&amp; journal? === true</code>
+            — plugin's filter matches first try</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Flow A mirrors a real-world manual reproduction: open Logseq,
+      delete today's file, watch Logseq re-create it with migrated
+      content. Same code path as the in-app today-link click and the
+      day-rollover timer.
+    </p>
+
+    <h3 id="testing-shortcuts">Shortcut testing — Escape after each press</h3>
+    <p>
+      When Logseq's editor opens on a block (via
+      <code>.block-content</code> click), the block's view-mode rendering
+      is replaced by the editor textarea. Until the editor closes, the
+      block isn't findable via <code>.block-content</code> selectors.
+      This broke chained-keystroke cases and caused state leakage between
+      cases.
+    </p>
+    <div class="callout good">
+      <strong>Fix:</strong> the harness sends <code>Escape</code> after
+      each shortcut press to commit the edit and close the editor. Plus
+      a defensive Escape at the start of <code>runShortcutCase</code>
+      for any leftover state from a prior case.
+    </div>
+
+    <h3 id="testing-isolation">Isolation — the macOS patch</h3>
+    <p>
+      Setting <code>HOME=$TMP</code> is not sufficient on macOS:
+      Electron's <code>app.getPath('home')</code> calls
+      <code>getpwuid(getuid())-&gt;pw_dir</code> and ignores
+      <code>HOME</code>. Logseq's <code>electron.js</code> mixes both
+      APIs, so an unpatched run reads/writes the user's real
+      <code>~/.logseq/</code>.
+    </p>
+    <p>
+      The harness hard-link-clones <code>/Applications/Logseq.app</code>
+      to <code>/tmp/LogseqPatched.app</code> via <code>pax -rwl</code>
+      (~3 s, ~0 disk because hardlinks), then breaks the hardlink only
+      on <code>Contents/Resources/app/electron.js</code> and rewrites
+      every <code>app.getPath("home")</code> and
+      <code>os.homedir()</code> to honor <code>LOGSEQ_FAKE_HOME</code>.
+      The original Logseq.app is never modified; reversible with
+      <code>rm -rf /tmp/LogseqPatched.app</code>.
+    </p>
+    <p>
+      The runner snapshots <code>~/.logseq/settings/</code> mtimes
+      before/after each run and fails non-zero if anything was touched.
+    </p>
+  </section>
+
+  <hr>
+
+  <section id="ai-first">
+    <h2>6. AI-first repo conventions</h2>
+    <p>
+      Minimum viable kit for a 300-LOC leaf project:
+    </p>
+    <ol>
+      <li><code>AGENTS.md</code> — root front door with a decision-table
+        for &quot;what you're doing → which doc to read&quot;</li>
+      <li><code>CLAUDE.md</code> — short redirect to AGENTS.md</li>
+      <li><code>agents/</code> — topic-named guides for stable knowledge
+        (overview, gotchas, build/release, testing, plugin-loading,
+        perf-testing)</li>
+      <li><code>agents/research/YYYY-MM-DD-topic.md</code> — dated
+        investigation logs (this doc is one)</li>
+      <li><code>package.json</code> scripts as the verb surface
+        (<code>check</code>, <code>test</code>, <code>perf</code>,
+        <code>verify</code>, <code>test:e2e</code>)</li>
+    </ol>
+    <p>
+      Topic guides answer &quot;how does this work today.&quot; Research
+      answers &quot;how did we figure this out and what else did we
+      consider.&quot; Don't mix them — mixing rots the topic guides.
+    </p>
+    <p>
+      Patterns deliberately skipped at this size:
+      <code>.claude/commands/</code>, <code>.claude/scripts/</code>,
+      <code>agents/skills/</code>, <code>agents/prompts/</code>,
+      <code>agents/plans/</code>, ADRs / <code>docs/decisions/</code>,
+      Cursor / Cline rules files. All overkill for a leaf project.
+    </p>
+  </section>
+
+  <hr>
+
+  <section id="open">
+    <h2>7. Open questions</h2>
+    <ul>
+      <li><strong>Sync ingestion tx shape on a brand-new today's journal</strong>
+        when the receiving device's DB doesn't yet have that page entity.
+        Code-path reading suggests it's a multi-block parser tx with
+        <code>:from-disk? true</code>, but worth confirming empirically.
+      </li>
+      <li><strong>Mobile sync pull timing</strong> relative to its 3 s
+        poll. If sync usually finishes first, mobile sees today's journal
+        already in DB after sync ingestion and skips
+        <code>create-today-journal!</code>. (Mobile doesn't run the
+        plugin anyway, so this only affects whether mobile creates
+        duplicate today-pages.)
+      </li>
+      <li><strong>Default <code>enable-sync-diff-merge?</code> setting.</strong>
+        Plugin behavior under duplicated migrations differs between
+        last-writer-wins and three-way-merge modes.</li>
+      <li><strong>DB-graph era.</strong> The user is on file graphs. DB
+        graphs use a different sync stack (<code>deps/db-sync/</code>,
+        <code>src/main/frontend/worker/sync.cljs</code>) that transmits
+        datascript-level ops. Plugin behavior under that stack is a
+        separate research question.</li>
+      <li><strong>Logseq running while macOS is genuinely off.</strong>
+        Hibernation kills the process; the migration can't run. After
+        wake from hibernate, the next 3 s poll fires migration. Worth
+        confirming that the user's reported &quot;Logseq app closed&quot;
+        cases were actually Cmd+W (window closed, process running) vs
+        Cmd+Q (process killed). If process killed, then
+        autostart-on-login or the next manual app-open is when migration
+        runs, not while genuinely powered off.</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <section id="sources">
+    <h2>8. Source references</h2>
+
+    <h3>This repo</h3>
+    <ul>
+      <li><code>agents/research/2026-05-09-modernization-ai-first-and-e2e.md</code>
+        — durable reference for plugin loading, modernization, testing,
+        AI-first conventions</li>
+      <li><code>agents/research/2026-05-09-logseq-sync-implications.md</code>
+        — sync architecture and multi-device implications (currently in
+        PR #12)</li>
+      <li><code>agents/gotchas.md</code> — distilled don't-do list with
+        rationale inline</li>
+      <li><code>agents/testing.md</code> — testing strategy and how to
+        run/extend the suites</li>
+    </ul>
+
+    <h3>Logseq source (logseq/logseq @ tag 0.10.9)</h3>
+    <ul>
+      <li><code>src/main/frontend/handler.cljs:50-72</code> — 3 s
+        <code>watch-for-date!</code> poll</li>
+      <li><code>src/main/frontend/handler/page.cljs:281-299</code> —
+        <code>create-today-journal!</code></li>
+      <li><code>src/main/frontend/handler/page.cljs:125-178</code> —
+        <code>create!</code> and the page-creation transaction</li>
+      <li><code>deps/graph-parser/src/logseq/graph_parser/block.cljs:287-326</code>
+        — <code>page-name->map</code></li>
+      <li><code>src/main/frontend/fs/sync.cljs:735-771</code> —
+        <code>IRSAPI</code> protocol</li>
+      <li><code>src/main/frontend/fs/sync.cljs:850-856, 2023-2028</code>
+        — age encryption</li>
+      <li><code>src/main/frontend/fs/sync.cljs:1700-1761</code> —
+        <code>apply-filetxns</code></li>
+      <li><code>src/main/frontend/fs/diff_merge.cljs:170</code> —
+        three-way merge</li>
+      <li><code>src/main/frontend/fs/watcher_handler.cljs:58-137</code>
+        — <code>handle-changed!</code></li>
+      <li><code>src/main/frontend/handler/file.cljs:142-196</code> —
+        <code>alter-file</code></li>
+      <li><code>src/main/frontend/handler/plugin.cljs:1276</code> —
+        6-second warning threshold</li>
+      <li><code>libs/src/LSPlugin.core.ts:1504-1509</code> —
+        <code>perfInfo</code> timing</li>
+      <li><code>src/main/frontend/util.cljc:136-139</code>,
+        <code>config.cljs:149-152</code>,
+        <code>handler/plugin.cljs:1339-1344</code> — plugin platform
+        gating (mobile is excluded)</li>
+    </ul>
+
+    <h3>External</h3>
+    <ul>
+      <li>macOS Power Nap docs:
+        <a href="https://support.apple.com/guide/mac-help/use-power-nap-on-your-mac-mh40773/mac">support.apple.com/guide/mac-help/use-power-nap-on-your-mac-mh40773/mac</a></li>
+      <li><a href="https://agents.md">agents.md</a> — AGENTS.md cross-tool standard</li>
+      <li><a href="https://github.com/FiloSottile/age">FiloSottile/age</a>
+        — encryption library Logseq Sync uses</li>
+    </ul>
+  </section>
+
+  <p class="footnote">
+    Regenerated from <code>agents/research/*.md</code>,
+    <code>agents/gotchas.md</code>, and <code>agents/testing.md</code>.
+    When findings change, update the source markdown first, then
+    regenerate this summary.
+  </p>
+
+</main>
+</div>
+</body>
+</html>
