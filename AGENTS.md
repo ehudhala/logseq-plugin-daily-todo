@@ -20,6 +20,7 @@ No UI, no network, no React. All logic lives in `src/main.ts`. The
 
 | What you're doing | Read this first |
 |---|---|
+| Onboarding to the inner-loop / branching / PR style | [`agents/workflow.md`](./agents/workflow.md) |
 | Touching `src/main.ts` for the first time | [`agents/overview.md`](./agents/overview.md) |
 | Running tests / writing tests | [`agents/testing.md`](./agents/testing.md) |
 | Anything that affects bundle/build/load time | [`agents/logseq-plugin-loading.md`](./agents/logseq-plugin-loading.md) and [`agents/perf-testing.md`](./agents/perf-testing.md) |

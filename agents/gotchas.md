@@ -108,17 +108,24 @@ chunk count, presence of new requests, regression detection. For real
 absolute numbers, install the build into Logseq and use
 `__debugPluginsPerfInfo()`.
 
-## `@logseq/libs` v0.0.9 vs newer
+## `@logseq/libs` SDK versions
 
-This plugin pins `@logseq/libs@0.0.9`. v0.2/v0.3 changed enough APIs that
-upgrading isn't a drop-in — at minimum, sanity-check that `Editor`, `DB`,
-`App`, and `DB.onChanged` still match what `src/main.ts` uses. If you do
-upgrade, retest the journal-migration flow end-to-end against a real
-journal — the block-traversal API has been the most volatile area between
-versions.
+Currently pinned to `0.0.17` (the npm `latest` dist-tag and where the
+active-plugin tail sits as of 2026-05). `0.2.x` and `0.3.x` are tagged
+`next` — possible to bump but don't do so without a reason:
 
-The size delta is also against you: 0.3.3's `lsplugin.user.js` is ~103KB
-vs 0.0.9's ~75KB. Don't upgrade for perf reasons alone.
+- The bundle gets larger (0.3.3's `lsplugin.user.js` is ~103KB vs
+  0.0.17's ~80KB). Bigger bundle = more `lsp://` IPC overhead before
+  `logseq.ready()`.
+- API surface drift is small but nonzero. The cross-version helpers
+  in `src/lib.ts` (`blockContent` reading `.title ?? .content`,
+  `MinimalBlock.title?: unknown`) handle 0.0.x and 0.0.17+ already.
+  0.3.x might add new shapes that need the same treatment.
+
+The plugin's BlockEntity shape concerns are documented in
+[`src/lib.ts`](../src/lib.ts) and the cross-version research in
+[`research/2026-05-09-modernization-ai-first-and-e2e.md`](./research/2026-05-09-modernization-ai-first-and-e2e.md)
+§2.
 
 ## The plugin's keyboard shortcuts are global
 
