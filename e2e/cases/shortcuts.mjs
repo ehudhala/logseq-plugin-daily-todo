@@ -93,4 +93,65 @@ export const shortcutCases = [
       notContains(j[TARGET], /\^\^/, 'no ^^ remains'),
     ),
   },
+
+  // === NOW workflow cases ===
+  // These pin :preferred-workflow :now in the graph's config.edn
+  // before the case runs. The plugin re-reads the workflow on every
+  // mod+1 press, so the change takes effect without a plugin reload.
+
+  {
+    name: 'now-mod1-blank-becomes-later',
+    preferredWorkflow: 'now',
+    journals: { today: `- Buy groceries\n- Pay bills\n` },
+    focusText: 'Buy groceries',
+    actions: [{ press: 'Meta+1' }],
+    expect: j => contains(j[TARGET], /^- LATER Buy groceries$/m, 'first block became LATER'),
+  },
+
+  {
+    name: 'now-mod1-later-becomes-done',
+    preferredWorkflow: 'now',
+    journals: { today: `- LATER Buy groceries\n- Pay bills\n` },
+    focusText: 'Buy groceries',
+    actions: [{ press: 'Meta+1' }],
+    expect: j => contains(j[TARGET], /^- DONE Buy groceries$/m, 'LATER advanced to DONE'),
+  },
+
+  {
+    name: 'now-mod1-now-becomes-done',
+    preferredWorkflow: 'now',
+    journals: { today: `- NOW Buy groceries\n- Pay bills\n` },
+    focusText: 'Buy groceries',
+    actions: [{ press: 'Meta+1' }],
+    expect: j => contains(j[TARGET], /^- DONE Buy groceries$/m, 'NOW advanced to DONE'),
+  },
+
+  {
+    name: 'now-mod1-todo-still-becomes-done',
+    // Wrong-mode handling: a TODO-prefixed block in now-mode should
+    // still advance to DONE, not get stuck. (This was the bug the
+    // original community PR introduced — TODO in now-mode produced
+    // `undefined` and corrupted the block.)
+    preferredWorkflow: 'now',
+    journals: { today: `- TODO Buy groceries\n- Pay bills\n` },
+    focusText: 'Buy groceries',
+    actions: [{ press: 'Meta+1' }],
+    expect: j => contains(j[TARGET], /^- DONE Buy groceries$/m, 'TODO in now-mode → DONE'),
+  },
+
+  {
+    name: 'now-mod1-full-cycle',
+    preferredWorkflow: 'now',
+    journals: { today: `- Buy groceries\n- Pay bills\n` },
+    focusText: 'Buy groceries',
+    actions: [
+      { press: 'Meta+1' },                                    // → LATER
+      { focusText: 'Buy groceries', press: 'Meta+1' },        // → DONE
+      { focusText: 'Buy groceries', press: 'Meta+1' },        // → blank
+    ],
+    expect: j => allOf(
+      contains(j[TARGET], /^- Buy groceries$/m, 'block back to plain'),
+      notContains(j[TARGET], /^- (LATER|NOW|TODO|DONE) Buy groceries$/m, 'no prefix'),
+    ),
+  },
 ];

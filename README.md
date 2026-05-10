@@ -3,7 +3,7 @@
 This plugin has two functions:
 * Every time a new journal is created - it moves all the unfinished tasks from the last journal to the new journal
 * Adds handy shortcuts from OneNote to Logseq:
-  * `cmd+1` - toggle TODO state of selected blocks between TODO/DONE/non-task block
+  * `cmd+1` - toggle TODO state of selected blocks between TODO/DONE/non-task block (or LATER/DONE/non-task in NOW workflow — see [Workflows](#workflows))
   * `cmd+4` - highlight the selected block
 
 The plugin skeleton and most shortcut handling is forked and updated from https://github.com/vipzhicheng/logseq-plugin-heading-level-shortcuts
@@ -25,6 +25,10 @@ For the following journal at end of day:
 The plugin will change the two journals as following when a new journal is created:
 
 ![journal_after](./journal_after.png)
+
+## Workflows
+
+`cmd+1` follows Logseq's **Preferred workflow** setting (Settings → Editor): TODO/DOING by default, or LATER/NOW if you select that. No plugin-level configuration.
 
 ## Installation
 

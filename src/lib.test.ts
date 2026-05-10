@@ -20,8 +20,11 @@ const b = (content: string, children: MinimalBlock[] = []): MinimalBlock => ({
 });
 
 describe('regex constants', () => {
-  it('todoRegex matches TODO prefix only at start', () => {
+  it('todoRegex matches any TODO-like prefix only at start', () => {
     expect(todoRegex.test('TODO buy milk')).toBe(true);
+    expect(todoRegex.test('DOING buy milk')).toBe(true);
+    expect(todoRegex.test('NOW buy milk')).toBe(true);
+    expect(todoRegex.test('LATER buy milk')).toBe(true);
     expect(todoRegex.test('  TODO buy milk')).toBe(false);
     expect(todoRegex.test('done TODO inline')).toBe(false);
     expect(todoRegex.test('DONE buy milk')).toBe(false);
@@ -33,8 +36,11 @@ describe('regex constants', () => {
     expect(doneRegex.test('Already DONE')).toBe(false);
   });
 
-  it('todoDoneRegex matches either', () => {
+  it('todoDoneRegex matches any TODO-like or DONE', () => {
     expect(todoDoneRegex.test('TODO x')).toBe(true);
+    expect(todoDoneRegex.test('DOING x')).toBe(true);
+    expect(todoDoneRegex.test('NOW x')).toBe(true);
+    expect(todoDoneRegex.test('LATER x')).toBe(true);
     expect(todoDoneRegex.test('DONE x')).toBe(true);
     expect(todoDoneRegex.test('plain x')).toBe(false);
   });
@@ -45,9 +51,12 @@ describe('regex constants', () => {
     expect(isUnderlineRegex.test('mixed <ins>Section</ins> rest')).toBe(true);
   });
 
-  it('highlightRegex matches optional TODO/DONE prefix + ^^...^^', () => {
+  it('highlightRegex matches optional TODO-like/DONE prefix + ^^...^^', () => {
     expect(highlightRegex.test('^^just text^^')).toBe(true);
     expect(highlightRegex.test('TODO ^^a task^^')).toBe(true);
+    expect(highlightRegex.test('DOING ^^a task^^')).toBe(true);
+    expect(highlightRegex.test('NOW ^^a task^^')).toBe(true);
+    expect(highlightRegex.test('LATER ^^a task^^')).toBe(true);
     expect(highlightRegex.test('DONE ^^a task^^')).toBe(true);
     expect(highlightRegex.test('plain text')).toBe(false);
   });
@@ -60,18 +69,56 @@ describe('regex constants', () => {
     const m2 = highlightRegex.exec('^^plain^^');
     expect(m2?.[1]).toBe('');
     expect(m2?.[2]).toBe('plain');
+
+    const m3 = highlightRegex.exec('LATER ^^a task^^');
+    expect(m3?.[1]).toBe('LATER ');
+    expect(m3?.[2]).toBe('a task');
   });
 });
 
 describe('getNextTodoState', () => {
-  it('cycles blank → TODO → DONE → blank', () => {
-    expect(getNextTodoState('')).toBe('TODO ');
-    expect(getNextTodoState('TODO')).toBe('DONE ');
-    expect(getNextTodoState('DONE')).toBe('');
+  describe('default (todo workflow)', () => {
+    it('cycles blank → TODO → DONE → blank', () => {
+      expect(getNextTodoState('')).toBe('TODO ');
+      expect(getNextTodoState('TODO')).toBe('DONE ');
+      expect(getNextTodoState('DONE')).toBe('');
+    });
+
+    it('treats DOING as TODO-like → DONE', () => {
+      expect(getNextTodoState('DOING')).toBe('DONE ');
+    });
+
+    it('handles wrong-mode tasks: NOW/LATER in todo workflow → DONE', () => {
+      // A user on todo-mode might still have NOW/LATER blocks if they
+      // imported them or switched workflows. Cycling them to DONE keeps
+      // the plugin useful instead of silently doing nothing.
+      expect(getNextTodoState('NOW', 'todo')).toBe('DONE ');
+      expect(getNextTodoState('LATER', 'todo')).toBe('DONE ');
+    });
+
+    it('returns empty string for unknown input (defensive)', () => {
+      expect(getNextTodoState('UNKNOWN')).toBe('');
+    });
   });
 
-  it('returns empty string for unknown input (defensive)', () => {
-    expect(getNextTodoState('UNKNOWN')).toBe('');
+  describe('now workflow', () => {
+    it('cycles blank → LATER → DONE → blank', () => {
+      expect(getNextTodoState('', 'now')).toBe('LATER ');
+      expect(getNextTodoState('LATER', 'now')).toBe('DONE ');
+      expect(getNextTodoState('DONE', 'now')).toBe('');
+    });
+
+    it('treats NOW as TODO-like → DONE', () => {
+      expect(getNextTodoState('NOW', 'now')).toBe('DONE ');
+    });
+
+    it('handles wrong-mode tasks: TODO/DOING in now workflow → DONE', () => {
+      // Symmetric: a user on now-mode might still have TODO/DOING blocks.
+      // (This was the bug in the original PR — TODO in now-mode returned
+      // undefined, so pressing mod+1 corrupted the block content.)
+      expect(getNextTodoState('TODO', 'now')).toBe('DONE ');
+      expect(getNextTodoState('DOING', 'now')).toBe('DONE ');
+    });
   });
 });
 

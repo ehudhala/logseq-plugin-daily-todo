@@ -158,6 +158,24 @@ class HarnessSession {
     this.results = [];
   }
 
+  // Set Logseq's preferred-workflow on the graph. The plugin re-reads
+  // logseq.App.getUserConfigs() on every shortcut press, so changes
+  // here take effect on the next mod+1 — no plugin reload needed.
+  // We rewrite config.edn and let Logseq's fs-watcher reload it.
+  async setPreferredWorkflow(workflow) {
+    const configPath = path.join(this.graphDir, 'logseq', 'config.edn');
+    const current = fs.readFileSync(configPath, 'utf8');
+    const next = current.replace(/:preferred-workflow\s+:\w+/, `:preferred-workflow :${workflow}`);
+    if (next === current) {
+      // Nothing changed — config already matches.
+      return;
+    }
+    fs.writeFileSync(configPath, next);
+    // Logseq picks up config.edn changes via the fs-watcher; getUserConfigs()
+    // reflects the new value within ~1s.
+    await this.page.waitForTimeout(1500);
+  }
+
   // Reset all journal state. After this returns, the graph has no
   // journal pages in datascript and no .md files on disk in journals/.
   // Critical: poll until Logseq stops re-creating today's file —
@@ -379,7 +397,14 @@ class HarnessSession {
   }
 
   // Run a single shortcut test case. The case object:
-  //   { name, journals, focusText, actions: [{ press: 'Meta+1' }, ...], expect: (journals) => string|null }
+  //   {
+  //     name,
+  //     journals,
+  //     focusText,
+  //     actions: [{ press: 'Meta+1' }, ...],
+  //     preferredWorkflow?: 'todo' | 'now',  // default 'todo'
+  //     expect: (journals) => string|null,
+  //   }
   // Shortcut cases use yesterday's journal as the test page because
   // Logseq's create-today-journal! races our seed for today.
   async runShortcutCase(c) {
@@ -388,6 +413,9 @@ class HarnessSession {
     // Defensive: if a previous case left the editor open, close it first
     await this.page.keyboard.press('Escape').catch(() => {});
     await this.page.waitForTimeout(200);
+    // Pin the workflow before each case so a prior case's setting can't
+    // leak in. Defaults to 'todo' (Logseq's default).
+    await this.setPreferredWorkflow(c.preferredWorkflow || 'todo');
     await this.resetGraph();
     // Always seed content under 'yesterday' regardless of what the case
     // declares — gives us a stable page Logseq won't auto-rewrite.
