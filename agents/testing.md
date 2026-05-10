@@ -1,25 +1,39 @@
 # Testing
 
-Two layers:
+Five gates, each with its own command:
 
-1. **Unit tests** (Vitest, `pnpm test`) — pure-logic helpers in
-   `src/lib.ts`. <1s per run; ideal inner loop while iterating on
-   regex / state-machine / group-split logic.
-2. **End-to-end tests** (`pnpm test:e2e`) — drive real Logseq.app via
-   Playwright with an isolated temp profile. Cover the journal-migration
-   logic by seeding markdown fixtures, triggering `create-today-journal!`
-   via file deletion, and asserting on the resulting markdown content.
-3. **Perf gate** (`pnpm perf`) — drives `perf-test/host.html` headlessly
-   and asserts the load-time invariants: 1 resource fetch (no chunk
-   splitting), median load < 800ms over loopback.
+1. **Type check** (`pnpm check`) — `tsc --noEmit` against `src/` and
+   `scripts/`. Fast (<2s) and the most specific failure signal — a TS
+   error usually points at a single line.
+2. **Lint** (`pnpm lint`) — ESLint 9 (flat config) for mechanical
+   style + the typescript-eslint recommended rules. ~5s.
+3. **Unit tests** (`pnpm test`) — Vitest on the pure helpers in
+   `src/lib.ts`. <1s. Ideal inner loop while iterating on regex /
+   state-machine / group-split logic.
+4. **Build** (`pnpm build`) — Vite. Confirms the bundle still emits
+   and stays single-chunk.
+5. **Perf gate** (`pnpm perf`) — drives `perf-test/host.html`
+   headlessly and asserts: 1 resource fetch (no chunk splitting),
+   median load < 800ms over loopback.
+
+Plus the slow E2E gate:
+
+6. **End-to-end tests** (`pnpm test:e2e`) — drives real Logseq.app
+   via Playwright with an isolated temp profile. Seeds markdown
+   fixtures, triggers `create-today-journal!` via file deletion,
+   asserts on resulting markdown content.
 
 ## Commands
 
 ```bash
+pnpm check                 # tsc --noEmit (<2s)
+pnpm lint                  # ESLint 9 (~5s)
+pnpm lint --fix            # auto-fix mechanical issues
 pnpm test                  # Vitest unit tests (<1s)
 pnpm test:watch            # Vitest in watch mode
+pnpm build                 # Vite build (~1s)
 pnpm perf                  # Headless perf gate (~5s)
-pnpm verify                # test + build + perf — the umbrella gate
+pnpm verify                # check + lint + test + build + perf — the umbrella gate
 pnpm test:e2e:quick        # one mega-migration sanity case (~17s)
 pnpm test:e2e              # full E2E suite — migration + shortcuts (~3m30s)
 pnpm test:e2e:shortcuts    # shortcut cases only (~1m30s)
@@ -39,19 +53,8 @@ nothing broadly regressed.
 
 ### Before opening a PR
 
-Run `pnpm test:e2e` (the full suite) — 13 cases that pin down each
-rule independently and surface specific failures. Two cases are
-expected to be `KNOWN-FAIL` against the current plugin code:
-
-- `rule-7-recursion-mixed-children` — when a parent has mixed
-  TODO/DONE children, the DONE child is dropped instead of staying
-  in source.
-- `rule-11-today-has-pre-existing-content` — when today already has
-  content, migration overwrites it instead of appending.
-
-Both are real plugin bugs the test surfaced. The assertions describe
-the *correct* behavior; flip the `knownFailing` flag once the plugin
-is fixed and the test will turn green.
+Run `pnpm verify` (the fast gate, ~30s) and `pnpm test:e2e` (the full
+suite, ~3m30s). The suite is fully green: no `KNOWN-FAIL` cases.
 
 ## How it works (short version)
 
@@ -66,10 +69,10 @@ is fixed and the test will turn green.
   `_electron.launch`, opens the fixture graph, waits for the plugin to
   load, and exposes per-case helpers (`runMigrationCase`,
   `runShortcutCase`, `resetGraph`, `seedJournals`, `triggerMigration`).
-- `e2e/cases/migration.mjs` — the 12 rule-based migration cases.
+- `e2e/cases/migration.mjs` — the rule-based migration cases.
 - `e2e/cases/sanity.mjs` — the one mega-fixture case for `--quick`.
-- `e2e/cases/shortcuts.mjs` — keyboard shortcut cases (some marked
-  `knownFailing` due to harness-level focus issues; see file comments).
+- `e2e/cases/shortcuts.mjs` — keyboard shortcut cases (Meta+1 cycle
+  TODO state; Meta+4 toggle highlight).
 - `e2e/fixtures/test-graph/` — minimal Logseq graph: just
   `logseq/config.edn`. Journals are written at test time using real
   system dates.
