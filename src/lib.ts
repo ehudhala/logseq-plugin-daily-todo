@@ -47,11 +47,11 @@ export const blockContent = (block: MinimalBlock | undefined | null): string => 
   return block.content ?? '';
 };
 
-export const isHighlighted = (block: MinimalBlock): boolean => {
+export const isHighlighted = (block: MinimalBlock | undefined | null): boolean => {
   return highlightRegex.test(blockContent(block));
 };
 
-export const extractTodoState = (block: MinimalBlock): string => {
+export const extractTodoState = (block: MinimalBlock | undefined | null): string => {
   const match = todoDoneRegex.exec(blockContent(block));
   return match !== null && match.length > 0 ? match[1] : '';
 };
