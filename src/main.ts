@@ -2,16 +2,19 @@ import '@logseq/libs';
 
 import {BlockEntity} from '@logseq/libs/dist/LSPlugin';
 
-
-// Read a block's text content. In @logseq/libs >= 0.0.17 `block.content`
-// is @deprecated and `block.title` is canonical; both fields can be present
-// at runtime depending on Logseq version. Use this everywhere instead of
-// reading .content directly so the plugin works across SDK versions.
-const blockContent = (block: BlockEntity | undefined | null): string => {
-  if (!block) return '';
-  // .title is the new field but doesn't exist on the 0.0.9 type — cast.
-  return (block as any).title ?? block.content ?? '';
-};
+import {
+  blockContent,
+  doneRegex,
+  extractTodoState,
+  getNextTodoState,
+  highlightRegex,
+  isHighlighted,
+  isUnderlineRegex,
+  recursivelyCheckForRegexInBlock,
+  splitBlocksIntoGroups,
+  todoDoneRegex,
+  todoRegex,
+} from './lib';
 
 // Find the block immediately before `block` among its siblings. The legacy
 // API was `block.left.id`, but `BlockEntity.left` was removed in newer
@@ -44,13 +47,6 @@ async function getLeftSibling(block: BlockEntity): Promise<BlockEntity | null> {
   return await logseq.Editor.getBlock(siblings[idx - 1].uuid, { includeChildren: true });
 }
 
-const todoRegex = /^(TODO)\s+/;
-const doneRegex = /^(DONE)\s+/;
-const todoDoneRegex = /^(TODO|DONE)\s+/;
-const isUnderlineRegex = /<ins>.*<\/ins>/;
-
-const highlightRegex = /^(TODO\s+|DONE\s+|\s*)\^\^(.*)\^\^/;
-
 const settingsVersion = 'v1';
 export const defaultSettings = {
   keyBindings: {
@@ -75,14 +71,6 @@ const initSettings = () => {
   }
 };
 
-const getNextTodoState = (todoState: string) => {
-  return {
-    'TODO': 'DONE ',
-    'DONE': '',
-    '': 'TODO '
-  }[todoState];
-};
-
 const getSettings = (
   key: string | undefined,
   defaultValue: any = undefined
@@ -90,15 +78,6 @@ const getSettings = (
   let settings = logseq.settings;
   const merged = Object.assign(defaultSettings, settings);
   return key ? (merged[key] ? merged[key] : defaultValue) : merged;
-};
-
-const isHighlighted = (block: BlockEntity) => {
-  return highlightRegex.test(blockContent(block));
-};
-
-const extractTodoState = (block: BlockEntity) => {
-  let todoMatch = todoDoneRegex.exec(blockContent(block));
-  return (todoMatch !== null && todoMatch.length > 0) ? todoMatch[1] : '';
 };
 
 async function toggleHighlight() {
@@ -213,14 +192,7 @@ async function updateNewJournalWithAllTODOs({blocks, txData, txMeta}) {
   const latestJournalBlocks = await logseq.Editor.getPageBlocksTree(latestJournal.name);
   console.log({latestJournalBlocks});
 
-  let latestJournalBlockGroups = [[]];
-  for (let block of latestJournalBlocks) {
-    if (blockContent(block) !== '') {
-      latestJournalBlockGroups[latestJournalBlockGroups.length - 1].push(block);
-    } else {
-      latestJournalBlockGroups.push([]);
-    }
-  }
+  const latestJournalBlockGroups = splitBlocksIntoGroups(latestJournalBlocks);
   console.log({latestJournalBlockGroups});
 
   let newJournalLastBlock = await getLastBlock(newJournalBlock.name);
@@ -308,10 +280,6 @@ async function recursiveCopyBlocks(srcBlock: BlockEntity, lastDestBlock: BlockEn
   return [newBlock, isBlockRemoved, hasAnyDoneDescendant];
 }
 
-
-function recursivelyCheckForRegexInBlock(block: BlockEntity, regex: RegExp): boolean {
-  return regex.test(blockContent(block)) || block.children.some(child => recursivelyCheckForRegexInBlock(child as BlockEntity, regex));
-}
 
 export const getLastBlock = async function (
   pageName: string

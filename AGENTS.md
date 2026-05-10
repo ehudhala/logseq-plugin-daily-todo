@@ -30,29 +30,28 @@ No UI, no network, no React. All logic lives in `src/main.ts`. The
 
 ## How to verify a change
 
-While iterating, run the quick sanity test for fast feedback (~17s):
+The canonical agent gate (no Logseq needed, ~5s):
 
 ```bash
-pnpm test:e2e:quick
+pnpm verify          # test + build + perf
 ```
 
-Before opening a PR, run the full migration suite (~2min):
+Inner-loop iteration on pure logic:
 
 ```bash
-pnpm test:e2e
+pnpm test            # Vitest unit tests (<1s)
+pnpm test:watch      # auto-rerun on save
 ```
 
-Both drive real Logseq via Playwright and assert on the on-disk
-markdown content. macOS only; requires `/Applications/Logseq.app`.
+End-to-end against real Logseq (macOS only, requires
+`/Applications/Logseq.app`):
+
+```bash
+pnpm test:e2e:quick  # one mega-migration sanity case (~17s)
+pnpm test:e2e        # full E2E suite (~3m30s, before opening a PR)
+```
+
 Full details in [`agents/testing.md`](./agents/testing.md).
-
-`pnpm build` produces `dist/`. Load it unpacked into Logseq to spot-check
-behavior the test suite doesn't cover yet — see
-[`agents/build-and-release.md`](./agents/build-and-release.md).
-
-Load-time can be measured without Logseq using
-[`perf-test/host.html`](./perf-test/host.html) — see
-[`agents/perf-testing.md`](./agents/perf-testing.md).
 
 ## Constraints worth knowing up front
 
