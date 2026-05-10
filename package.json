@@ -14,10 +14,11 @@
   },
   "scripts": {
     "build": "vite build && cp README.md LICENSE icon.png package.json dist/",
+    "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "perf": "node scripts/perf.mjs",
-    "verify": "pnpm test && pnpm build && pnpm perf",
+    "verify": "pnpm check && pnpm test && pnpm build && pnpm perf",
     "test:e2e": "bash e2e/run.sh",
     "test:e2e:quick": "bash e2e/run.sh --quick",
     "test:e2e:shortcuts": "bash e2e/run.sh --shortcuts"

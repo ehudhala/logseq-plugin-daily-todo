@@ -12,6 +12,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  type-check:
+    # tsc --noEmit against src/ + scripts/. Fast (<10s) and the most
+    # specific failure signal of the bunch — a TS error here usually
+    # points at a single line.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install pnpm
+        # package.json's packageManager field pins the version; corepack
+        # picks it up automatically. The setup action just installs it.
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm check
+
   unit:
     # Vitest unit tests for the pure helpers in src/lib.ts.
     runs-on: ubuntu-latest
@@ -25,12 +50,7 @@ jobs:
           node-version: "20.x"
 
       - name: Install pnpm
-        # Pin pnpm so CI doesn't drift to a major that requires a newer
-        # Node. Once toolchain modernization (#30) lands, package.json
-        # will gain a "packageManager" field and we can switch to corepack.
         uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -53,8 +73,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -78,8 +96,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -116,8 +132,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
